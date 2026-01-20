@@ -2,7 +2,11 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-
+//notification and setting
+import AdminNotifications from './pages/Admin/AdminNotifications';
+import AdminSettings from './pages/Admin/AdminSettings';
+import OwnerNotifications from './pages/Owner/OwnerNotifications';
+import OwnerSettings from './pages/Owner/OwnerSettings';
 // Import Layouts - These are the "parent" components
 import AdminLayout from './layout/AdminLayout';
 import OwnerLayout from './layout/OwnerLayout';
@@ -31,6 +35,8 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="books" element={<AdminBooks />} />
             <Route path="owners" element={<AdminOwners />} />
+            <Route path="notifications" element={<AdminNotifications />} /> 
+            <Route path="settings" element={<AdminSettings />} />
           </Route>
 
           {/* Owner Nested Routes */}
@@ -38,6 +44,8 @@ function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<OwnerDashboard />} />
             <Route path="upload" element={<BookUploadPage />} />
+            <Route path="notifications" element={<OwnerNotifications />} />
+            <Route path="settings" element={<OwnerSettings />} />
           </Route>
 
           {/* Fallback Routes */}

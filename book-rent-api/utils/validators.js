@@ -1,5 +1,3 @@
-// book-rent-api/utils/validators.js
-
 const { z } = require('zod');
 
 // Schema for user signup
@@ -11,10 +9,19 @@ const signupSchema = z.object({
     password: z.string({ required_error: 'Password is required' })
       .min(6, 'Password must be at least 6 characters long'),
 
-    location: z.string().optional(), // .optional() means it doesn't have to be provided
+    // Added: Frontend sends this, so we must allow/validate it
+    confirmPassword: z.string({ required_error: 'Confirm Password is required' }),
+
+    location: z.string().optional(), 
     phone: z.string().optional(),
-    name: z.string({ required_error: 'Name is required' }).min(2, 'Name is too short'),
-  
+    
+    // Changed: Made optional because your signup form might not have a "Name" field yet
+    name: z.string().optional(),
+  })
+  // Added: Logic to check if passwords match
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   }),
 });
 
@@ -23,10 +30,10 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   body: z.object({
     email: z.string({ required_error: 'Email is required' })
-      .email('A valid email is required'),
+      .email('A valid email is required'), // <--- Make sure you type a real email!
     
     password: z.string({ required_error: 'Password is required' })
-      .min(1, 'Password cannot be empty'), // A simple check for login
+      .min(1, 'Password cannot be empty'),
   }),
 });
 
@@ -34,10 +41,11 @@ const loginSchema = z.object({
 // Schema for book upload
 const bookSchema = z.object({
     body: z.object({
-        title: z.string({ required_error: 'Title is required' }).min(1, 'Title cannot be empty'),
+        // Updated keys to match database (bookName vs title)
+        bookName: z.string({ required_error: 'Book Name is required' }).min(1),
         author: z.string().optional(),
-        quantity: z.number({ required_error: 'Quantity is required' }).int().positive('Quantity must be a positive number'),
-        rent_price: z.number().positive('Rent price must be positive').optional(),
+        category: z.string().optional(),
+        price: z.number().positive().optional(),
     }),
 });
 

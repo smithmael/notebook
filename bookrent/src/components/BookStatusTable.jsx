@@ -63,6 +63,7 @@ export default function BookStatusTable({
   onRowsChange,              // required for edit/delete to persist
   pageSizeOptions = [8, 10],
   enableActions = true,      // set false if you want to hide Edit/Delete
+
 }) {
   // toolbar state (icon-only like your UI)
   const [query, setQuery] = useState("");
@@ -236,7 +237,7 @@ export default function BookStatusTable({
   const selectedSortDir = sortModel?.[0]?.sort || "asc";
 
   return (
-    <Paper elevation={1} sx={{ p: 2.5, borderRadius: 3, height: "100%" }}>
+    <Paper elevation={1} sx={{ p: 2.5, borderRadius: 3, height: "100%"}}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
         <Typography fontWeight={700}>{title}</Typography>
 

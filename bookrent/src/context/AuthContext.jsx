@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const API_URL = 'http://localhost:5001/api';
+const API_URL = 'http://127.0.0.1:5000/api';
 const AuthContext = createContext(null);
 
 // 1. CREATE A HELPER FUNCTION TO SET THE TOKEN

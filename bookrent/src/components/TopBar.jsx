@@ -11,7 +11,7 @@ const TopBar = () => {
       }}
     >
       <Typography variant="subtitle2" color="text.secondary">
-        Owner / <Typography component="span" variant="subtitle2" fontWeight="bold" color="text.primary">Dashboard</Typography>
+        Main / <Typography component="span" variant="subtitle2" fontWeight="bold" color="text.primary">Dashboard</Typography>
       </Typography>
     </Box>
   );

@@ -17,9 +17,8 @@ import LoginIcon from '@mui/icons-material/Login'; // For "Login as Book Owner"
 const adminNavItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/admin/dashboard' },
   { text: 'Books', icon: <BookIcon />, path: '/admin/books' },
-  { text: 'Owners', icon: <GroupIcon />, path: '/admin/owners' },
-  { text: 'Other', icon: <HelpOutlineIcon />, path: '/admin/other1' },
-  { text: 'Other', icon: <HelpOutlineIcon />, path: '/admin/other2' },
+  { text: 'Notifications', icon: <NotificationsIcon />, path: '/admin/notifications' },
+  { text: 'Settings', icon: <SettingsIcon />, path: '/admin/settings' },
 ];
 
 const ownerNavItems = [
@@ -27,15 +26,10 @@ const ownerNavItems = [
   { text: 'Book Upload', icon: <UploadFileIcon />, path: '/owner/upload' },
   { text: 'Notifications', icon: <NotificationsIcon />, path: '/owner/notifications' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/owner/settings' },
-  { text: 'Login as Admin', icon: <LoginIcon />, path: '/login' }, // Path to a login page
+   
 ];
 
-// Reusable settings/notification items if they are common
-const commonBottomItems = [
-    { text: 'Notification', icon: <NotificationsIcon />, path: '/notifications' },
-    { text: 'Setting', icon: <SettingsIcon />, path: '/settings' },
-];
-
+ 
 
 const Sidebar = ({ userRole }) => {
   const navigate = useNavigate();

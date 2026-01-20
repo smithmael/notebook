@@ -20,3 +20,10 @@ pool.connect((err, client, release) => {
 module.exports = {
   query: (text, params) => pool.query(text, params),
 };
+
+const { PrismaClient } = require('@prisma/client');
+
+// This creates one single connection instance to reuse
+const prisma = new PrismaClient();
+
+module.exports = prisma;

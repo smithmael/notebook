@@ -1,310 +1,425 @@
-// =================================================================
-//                      IMPORTS AND CONFIG
-// =================================================================
-
+// server.js
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-require('dotenv').config();
+const bcrypt = require('bcryptjs'); // from your package-lock
+const { PrismaClient } = require('@prisma/client');
 
-// --- Local Module Imports ---
-const db = require('./db');
-const authMiddleware = require('./middleware/auth');
 const validate = require('./middleware/validate');
+const auth = require('./middleware/auth');
 const { signupSchema, loginSchema, bookSchema } = require('./utils/validators');
+const defineAbilityFor = require('./utils/ability'); // you must create this file
 
-// =================================================================
-//                      EXPRESS APP SETUP
-// =================================================================
-
+const prisma = new PrismaClient();
 const app = express();
+
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// =================================================================
-//                      MULTER FILE UPLOAD SETUP
-// =================================================================
+// ------------------------------------------------------
+// AUTH ROUTES
+// ------------------------------------------------------
 
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir);
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-        cb(null, true);
-    } else {
-        cb(new Error('Only image files are allowed!'), false);
-    }
-};
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: fileFilter,
-});
-
-
-// =================================================================
-//                    CUSTOM MIDDLEWARES
-// =================================================================
-
-const adminMiddleware = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
-        next();
-    } else {
-        res.status(403).json({ message: 'Access denied. Admin role required.' });
-    }
-};
-
-// =================================================================
-//                            API ROUTES
-// =================================================================
-
-// --- 1. AUTHENTICATION ROUTES (Public) ---
-app.post('/api/auth/signup', validate(signupSchema), async (req, res) => {
-  const { email, password, location, phone, name } = req.body;
+// OWNER SIGNUP
+app.post('/api/auth/signup-owner', validate(signupSchema), async (req, res) => {
   try {
-    const userCheck = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (userCheck.rows.length > 0) {
-      return res.status(400).json({ errors: [{ message: 'User with this email already exists.' }] });
-    }
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-    const result = await db.query(
-      'INSERT INTO users (email, password_hash, role, location, phone_number, name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, role',
-      [email, passwordHash, 'owner', location, phone, name]
-    );
-    res.status(201).json({ message: 'User created successfully! Awaiting admin approval.', user: result.rows[0] });
+    // Zod validated shape: { body: {...}, query, params }
+    const { email, password, confirmPassword, location, phone, name } = req.validated.body;
+
+    // (confirmPassword was already checked by Zod refine – if mismatched, Zod 400'd)
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return res.status(400).json({ message: 'User already exists' });
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashed,
+        role: 'owner',
+        name: name || '',
+        location: location || '',
+        phone: phone || '',
+        status: 'pending', // must be approved by admin
+        wallet: 0,
+      },
+    });
+
+    return res.status(201).json({
+      message: 'Owner created, waiting for approval',
+      user,
+    });
   } catch (err) {
-    console.error('Signup Error:', err.message);
-    res.status(500).json({ errors: [{ message: 'Server error during user registration.' }] });
+    console.error('Signup-owner error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
+// LOGIN
 app.post('/api/auth/login', validate(loginSchema), async (req, res) => {
-  const { email, password } = req.body;
   try {
-    const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ errors: [{ message: 'Invalid credentials.' }] });
-    }
-    const user = userResult.rows[0];
-    if (user.role === 'owner' && user.status !== 'approved') {
-        return res.status(403).json({ errors: [{ message: `Your account is currently ${user.status}. Please wait for admin approval.`}] });
-    }
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
-      return res.status(401).json({ errors: [{ message: 'Invalid credentials.' }] });
-    }
-    const payload = { user: { id: user.id, role: user.role } };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
+    const { email, password } = req.validated.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+
+    const payload = {
+      user: {
+        id: user.id,
+        role: user.role,
+      },
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        status: user.status,
+      },
+    });
   } catch (err) {
-    console.error('Login Error:', err.message);
-    res.status(500).json({ errors: [{ message: 'Server error during login.' }] });
+    console.error('Login error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
+// ------------------------------------------------------
+// OWNER BOOK ROUTES (protected by JWT & CASL)
+// ------------------------------------------------------
 
-// --- 2. OWNER MANAGEMENT ROUTES (Admin Only) ---
-app.get('/api/owners', [authMiddleware, adminMiddleware], async (req, res) => {
-    const { search, status } = req.query; // Changed from req.body to req.query
-    try {
-        let ownersQuery = "SELECT id, email, name, location, phone_number, status, created_at FROM users WHERE role = 'owner'";
-        const queryParams = [];
-        let paramIndex = 1;
-        if (search) {
-            ownersQuery += ` AND (email ILIKE $${paramIndex} OR name ILIKE $${paramIndex})`;
-            queryParams.push(`%${search}%`);
-            paramIndex++;
-        }
-        if (status && ['pending', 'approved', 'suspended'].includes(status)) {
-            ownersQuery += ` AND status = $${paramIndex}`;
-            queryParams.push(status);
-            paramIndex++;
-        }
-        ownersQuery += " ORDER BY created_at DESC";
-        const { rows } = await db.query(ownersQuery, queryParams);
-        res.json(rows);
-    } catch (err) {
-        console.error('Get Owners Error:', err.message);
-        res.status(500).json({ errors: [{ message: 'Server error' }] });
+// Upload book (Owner)
+app.post('/api/owner/books', auth, validate(bookSchema), async (req, res) => {
+  try {
+    const currentUser = req.user; // { id, role } from auth.js
+    const ability = defineAbilityFor(currentUser);
+    if (!ability.can('create', 'Book')) {
+      return res.status(403).json({ message: "You can't upload books" });
     }
-});
 
-app.patch('/api/owners/:id/approve', [authMiddleware, adminMiddleware], async (req, res) => {
-    try {
-        const { id } = req.params;
-        const result = await db.query( "UPDATE users SET status = 'approved' WHERE id = $1 AND role = 'owner' RETURNING id, status", [id] );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Owner not found.' });
-        }
-        res.json({ message: 'Owner approved successfully', owner: result.rows[0] });
-    } catch (err) {
-        console.error('Approve Owner Error:', err.message);
-        res.status(500).json({ errors: [{ message: 'Server error' }] });
-    }
-});
+    const { bookName, author, category, price } = req.validated.body;
 
-app.delete('/api/owners/:id', [authMiddleware, adminMiddleware], async (req, res) => {
-    try {
-        const { id } = req.params;
-        const result = await db.query("DELETE FROM users WHERE id = $1 AND role = 'owner'", [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Owner not found.' });
-        }
-        res.json({ message: 'Owner deleted successfully' });
-    } catch (err) {
-        console.error('Delete Owner Error:', err.message);
-        res.status(500).json({ errors: [{ message: 'Server error' }] });
-    }
-});
+    // ensure owner exists
+    const owner = await prisma.user.findUnique({ where: { id: currentUser.id } });
+    if (!owner) return res.status(404).json({ message: 'Owner not found' });
 
+    // assume schema: title, author, category, totalCopies, availableCopies, rentPrice, status, ownerId
+    const book = await prisma.book.create({
+      data: {
+        title: bookName,
+        author: author || '',
+        category: category || '',
+        totalCopies: 1,
+        availableCopies: 1,
+        rentPrice: price ?? 0,
+        status: 'pending', // must be approved by admin
+        ownerId: currentUser.id,
+      },
+    });
 
-// --- 3. BOOK MANAGEMENT ROUTES ---
-app.post( '/api/books', [authMiddleware, upload.single('coverImage')], async (req, res) => {
-    const { title, author, quantity, rentPrice } = req.body;
-    const ownerId = req.user.id;
-    try {
-      const dataToValidate = {
-        title, author, 
-        quantity: quantity ? parseInt(quantity, 10) : undefined,
-        rent_price: rentPrice ? parseFloat(rentPrice) : undefined
-      };
-      
-      const validation = bookSchema.safeParse({ body: dataToValidate });
-      if (!validation.success) {
-          if (req.file) { fs.unlinkSync(req.file.path); }
-          return res.status(400).json({ errors: validation.error.errors });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({ errors: [{ message: 'Book cover image is required.' }] });
-      }
-
-      const coverImageUrl = `/uploads/${req.file.filename}`;
-
-      const result = await db.query(
-        'INSERT INTO books (title, author, quantity, rent_price, cover_image_url, owner_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [title, author, dataToValidate.quantity, dataToValidate.rent_price, coverImageUrl, ownerId]
-      );
-      
-      res.status(201).json(result.rows[0]);
-    } catch (err) {
-      console.error('Book Upload Error:', err.message);
-      res.status(500).json({ errors: [{ message: 'Server error while creating book.' }] });
-    }
+    return res.status(201).json(book);
+  } catch (err) {
+    console.error('Create book error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
-);
-// in book-rent-api/server.js
-// ...
-app.post(
-  '/api/books', // The path MUST be this
-  [authMiddleware, upload.single('coverImage')], // 'coverImage' MUST match FormData
-  async (req, res) => {
-    // ... your logic
+});
+
+// Owner: list own books (server-side filtering)
+app.get('/api/owner/books', auth, async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const ability = defineAbilityFor(currentUser);
+    if (!ability.can('read', 'Book')) {
+      return res.status(403).json({ message: "You can't view books" });
+    }
+
+    const { page = 1, pageSize = 10, search = '' } = req.query;
+    const p = Number(page);
+    const s = Number(pageSize);
+
+    const where = {
+      ownerId: currentUser.id,
+      OR: search
+        ? [
+            { title: { contains: search, mode: 'insensitive' } },
+            { author: { contains: search, mode: 'insensitive' } },
+            { category: { contains: search, mode: 'insensitive' } },
+          ]
+        : undefined,
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.book.findMany({
+        where,
+        skip: (p - 1) * s,
+        take: s,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.book.count({ where }),
+    ]);
+
+    return res.json({ data, total, page: p, pageSize: s });
+  } catch (err) {
+    console.error('Owner list books error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
-);
-// ...
+});
 
-// =================================================================
-//                      SIMPLE UPLOAD TEST ROUTE
-// =================================================================
-app.post('/api/upload-test', [authMiddleware, upload.single('coverImage')], (req, res) => {
-  console.log('--- UPLOAD TEST ROUTE HIT ---');
-  console.log('Request Body:', req.body); // Should show text fields
-  console.log('Request File:', req.file); // Should show file info
+// Owner: update own book (status / copies)
+app.patch('/api/owner/books/:id', auth, async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const bookId = Number(req.params.id);
 
-  if (!req.file) {
-    console.error('ERROR: No file was received by the server.');
-    return res.status(400).json({ message: 'No file uploaded.' });
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return res.status(404).json({ message: 'Book not found' });
+
+    const ability = defineAbilityFor(currentUser);
+    if (!ability.can('update', book)) {
+      return res.status(403).json({ message: "You can't update this book" });
+    }
+
+    const { totalCopies, availableCopies, status } = req.body;
+
+    const updated = await prisma.book.update({
+      where: { id: bookId },
+      data: {
+        totalCopies: totalCopies ?? book.totalCopies,
+        availableCopies: availableCopies ?? book.availableCopies,
+        status: status ?? book.status,
+      },
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error('Update book error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
-
-  // If we get here, the file was received and saved by multer.
-  console.log(`SUCCESS: File "${req.file.originalname}" uploaded successfully.`);
-  res.status(200).json({ 
-    message: 'Test upload successful!',
-    filename: req.file.filename,
-    path: req.file.path 
-  });
 });
-// For demo: return all books (in-memory array)
-app.get('/api/books', async (req, res) => {
-  const result = await db.query('SELECT * FROM books');
-  res.json(result.rows);
-});
-// in book-rent-api/server.js
 
-// ... after your GET /api/books-admin route ...
+// Owner: delete own book
+app.delete('/api/owner/books/:id', auth, async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const bookId = Number(req.params.id);
 
-/**
- * @route   PATCH /api/books-admin/:id/status
- * @desc    Admin updates a book's status (e.g., active/inactive)
- * @access  Private (Admin only)
- */
-app.patch('/api/books-admin/:id/status', [authMiddleware, adminMiddleware], async (req, res) => {
-    const { id } = req.params;
-    const { status } = req.body; // Expecting { "status": "inactive" } or { "status": "active" }
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return res.status(404).json({ message: 'Book not found' });
 
-    if (!status || !['active', 'inactive'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid status provided.' });
+    const ability = defineAbilityFor(currentUser);
+    if (!ability.can('delete', book)) {
+      return res.status(403).json({ message: "You can't delete this book" });
     }
 
-    try {
-        const result = await db.query(
-            "UPDATE books SET status = $1 WHERE id = $2 RETURNING id, status",
-            [status, id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Book not found.' });
-        }
-        res.json({ message: 'Book status updated successfully', book: result.rows[0] });
-    } catch (err) {
-        console.error('Update Book Status Error:', err.message);
-        res.status(500).json({ errors: [{ message: 'Server error' }] });
+    await prisma.book.delete({ where: { id: bookId } });
+    return res.json({ message: 'Book deleted' });
+  } catch (err) {
+    console.error('Delete book error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Owner: revenue summary
+app.get('/api/owner/revenue', auth, async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const ability = defineAbilityFor(currentUser);
+    if (!ability.can('read', 'OwnerRevenue', { ownerId: currentUser.id })) {
+      return res.status(403).json({ message: "You can't see this revenue" });
     }
+
+    const rentals = await prisma.rental.findMany({
+      where: { ownerId: currentUser.id },
+    });
+
+    const revenue = rentals.reduce((sum, r) => sum + r.price, 0);
+    return res.json({ revenue, rentalsCount: rentals.length });
+  } catch (err) {
+    console.error('Owner revenue error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
 });
 
+// ------------------------------------------------------
+// ADMIN ROUTES (examples)
+// ------------------------------------------------------
 
-/**
- * @route   DELETE /api/books-admin/:id
- * @desc    Admin deletes any book
- * @access  Private (Admin only)
- */
-app.delete('/api/books-admin/:id', [authMiddleware, adminMiddleware], async (req, res) => {
-    try {
-        const { id } = req.params;
-        const result = await db.query("DELETE FROM books WHERE id = $1", [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Book not found.' });
-        }
-        res.json({ message: 'Book deleted successfully by admin' });
-    } catch (err) {
-        console.error('Admin Delete Book Error:', err.message);
-        res.status(500).json({ errors: [{ message: 'Server error' }] });
+// Admin: list owners with filters
+app.get('/api/admin/owners', auth, async (req, res) => {
+  try {
+    const ability = defineAbilityFor(req.user);
+    if (!ability.can('manage', 'all')) {
+      return res.status(403).json({ message: 'Only admins can view owners' });
     }
+
+    const { search = '', status, location } = req.query;
+    const where = {
+      role: 'owner',
+      AND: [
+        status ? { status } : {},
+        location ? { location: { contains: location, mode: 'insensitive' } } : {},
+        search
+          ? {
+              OR: [
+                { email: { contains: search, mode: 'insensitive' } },
+                { name: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {},
+      ],
+    };
+
+    const owners = await prisma.user.findMany({ where });
+    return res.json(owners);
+  } catch (err) {
+    console.error('Admin owners error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
 });
 
-// NOTE: A PUT /api/books-admin/:id route for editing all book details would go here as well.
-// =================================================================
-//                      SERVER STARTUP
-// =================================================================
+// Admin: approve owner
+app.post('/api/admin/owners/:id/approve', auth, async (req, res) => {
+  try {
+    const ability = defineAbilityFor(req.user);
+    if (!ability.can('manage', 'all')) {
+      return res.status(403).json({ message: 'Only admins can approve owners' });
+    }
 
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
-  console.log(`Node.js API server is running on http://localhost:${PORT}`);
+    const id = Number(req.params.id);
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { status: 'approved' },
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error('Approve owner error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
 });
+
+// Admin: disable owner
+app.post('/api/admin/owners/:id/disable', auth, async (req, res) => {
+  try {
+    const ability = defineAbilityFor(req.user);
+    if (!ability.can('manage', 'all')) {
+      return res.status(403).json({ message: 'Only admins can disable owners' });
+    }
+
+    const id = Number(req.params.id);
+    const updatedOwner = await prisma.user.update({
+      where: { id },
+      data: { status: 'disabled' },
+    });
+
+    await prisma.book.updateMany({
+      where: { ownerId: id },
+      data: { status: 'disabled' },
+    });
+
+    return res.json(updatedOwner);
+  } catch (err) {
+    console.error('Disable owner error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Admin: list books with filters (server-side for MRT)
+app.get('/api/admin/books', auth, async (req, res) => {
+  try {
+    const ability = defineAbilityFor(req.user);
+    if (!ability.can('manage', 'all')) {
+      return res.status(403).json({ message: 'Only admins can view all books' });
+    }
+
+    const {
+      page = 1,
+      pageSize = 10,
+      search = '',
+      category,
+      author,
+      ownerId,
+      ownerLocation,
+      status,
+    } = req.query;
+
+    const p = Number(page);
+    const s = Number(pageSize);
+
+    const where = {
+      AND: [
+        category ? { category } : {},
+        author ? { author: { contains: author, mode: 'insensitive' } } : {},
+        ownerId ? { ownerId: Number(ownerId) } : {},
+        ownerLocation ? { owner: { location: { contains: ownerLocation, mode: 'insensitive' } } } : {},
+        status ? { status } : {},
+        search
+          ? {
+              OR: [
+                { title: { contains: search, mode: 'insensitive' } },
+                { author: { contains: search, mode: 'insensitive' } },
+                { category: { contains: search, mode: 'insensitive' } },
+                { owner: { email: { contains: search, mode: 'insensitive' } } },
+              ],
+            }
+          : {},
+      ],
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.book.findMany({
+        where,
+        include: { owner: true },
+        skip: (p - 1) * s,
+        take: s,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.book.count({ where }),
+    ]);
+
+    return res.json({ data, total, page: p, pageSize: s });
+  } catch (err) {
+    console.error('Admin books error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Admin: approve book
+app.post('/api/admin/books/:id/approve', auth, async (req, res) => {
+  try {
+    const ability = defineAbilityFor(req.user);
+    if (!ability.can('manage', 'all')) {
+      return res.status(403).json({ message: 'Only admins can approve books' });
+    }
+
+    const id = Number(req.params.id);
+    const updated = await prisma.book.update({
+      where: { id },
+      data: { status: 'approved' },
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error('Approve book error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ------------------------------------------------------
+// HEALTH CHECK
+// ------------------------------------------------------
+app.get('/', (_req, res) => {
+  res.send('Book Rent API is running');
+});
+
+// ------------------------------------------------------
+const PORT = 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
