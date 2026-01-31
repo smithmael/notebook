@@ -7,25 +7,46 @@ import PieChartCard from "../../components/PieChartCard";
 import BookStatusTable from "../../components/BookStatusTable";
 import LineChartCard from "../../components/LineChartCard";
 
+const API_URL = 'http://localhost:5000/api';
+
 export default function AdminDashboard() {
-  const [data, setData] = useState({
-    totalIncome: 0,
-    totalOwners: 0,
-    totalBooks: 0,
-    recentBooks: []
-  });
+  const [counts, setCounts] = useState({ owners: 0, books: 0 });
+  const [recentBooks, setRecentBooks] = useState([]);
+  const [chartData, setChartData] = useState([]);
 
   useEffect(() => {
-    axios.get('http://localhost:5000/api/admin/dashboard')
-      .then(res => setData(res.data))
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
+    const getChartData = axios.get(`${API_URL}/admin/revenue-chart`, { headers });
+    // 1. Fetch Owners
+    const getOwners = axios.get(`${API_URL}/admin/owners`, { headers });
+    // 2. Fetch Books
+    const getBooks = axios.get(`${API_URL}/admin/books`, { headers });
+
+    Promise.all([getOwners, getBooks, getChartData])
+      .then(([ownerRes, bookRes, chartRes]) => {
+        setCounts({
+          owners: ownerRes.data.length,
+          books: bookRes.data.total // or bookRes.data.data.length
+        });
+          const formattedChartData = (chartRes.data || []).map(d => ({
+            ...d,
+            current: d.current / 1000,
+            previous: d.previous / 1000,
+        }));
+        setChartData(formattedChartData);
+      
+        // Show first 5 books as "Recent"
+        setRecentBooks(bookRes.data.data.slice(0, 5));
+      })
       .catch(err => console.error(err));
   }, []);
 
-  // Mock chart data (since we aren't calculating history in backend yet)
   const donutData = [
-    { name: "Fiction", value: 54, color: "#007AFF" },
-    { name: "Business", value: 26, color: "#FF3B30" },
+    { name: "Fiction", value: 50, color: "#007AFF" }, // Mock data
+    { name: "Business", value: 50, color: "#FF3B30" }, // Mock data
   ];
+
   const lineData = ["May", "Jun", "Jul", "Aug"].map(m => ({
     label: m, current: Math.random() * 100, previous: Math.random() * 80
   }));
@@ -33,21 +54,18 @@ export default function AdminDashboard() {
   return (
     <Box sx={{ width: "100%" }}>
       <Grid container spacing={3}>
-        {/* LEFT COLUMN: System Stats */}
         <Grid item xs={12} md={4}>
           <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: "100%", bgcolor: "white" }}>
             <Stack spacing={3}>
-              <StatsCard
-                title="Total Income"
-                amount={`ETB ${data.totalIncome.toFixed(2)}`}
-                dateTime="System Wide"
-                incomeChip="All Time"
-              />
                <StatsCard
                 title="Total Owners"
-                amount={data.totalOwners}
+                amount={counts.owners}
                 dateTime="Active Users"
-                incomeChip="Users"
+              />
+              <StatsCard
+                title="Total Books"
+                amount={counts.books}
+                dateTime="System Wide"
               />
               <Divider />
               <PieChartCard title="Books by Category" data={donutData} showLegend />
@@ -55,18 +73,20 @@ export default function AdminDashboard() {
           </Paper>
         </Grid>
 
-        {/* RIGHT COLUMN: Recent Rentals Table */}
         <Grid item xs={12} md={8}>
-          <BookStatusTable 
-            title="Recent Rentals" 
-            rows={data.recentBooks} 
-            enableActions={false} // Admin just views here
-          />
+        <BookStatusTable
+         title="Recent Books"
+          rows={recentBooks}
+          enableActions={true}    
+           onRowsChange={setRecentBooks}
+/>
         </Grid>
 
-        {/* BOTTOM: Growth Chart */}
         <Grid item xs={12}>
-           <LineChartCard title="Revenue Growth" data={lineData} />
+           <LineChartCard 
+            title="Earning Summary" 
+            data={chartData} 
+          />
         </Grid>
       </Grid>
     </Box>

@@ -20,8 +20,7 @@ function SignupPage() {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  const handleSignup = async (event) => {
+const handleSignup = async (event) => {
     event.preventDefault();
     setError('');
     setSuccess('');
@@ -35,17 +34,16 @@ function SignupPage() {
     }
 
     try {
-      // Create the data object to send to the API
-      const userData = { name, email, password, location, phone };
+      // --- THE FIX IS HERE: Added confirmPassword ---
+      const userData = { name, email, password, confirmPassword, location, phone };
       
       // Call the signup function from our context
       await signup(userData);
       
       setSuccess('Account created successfully! Please log in.');
-      setTimeout(() => navigate('/login'), 2000); // Redirect to login after 2 seconds
+      setTimeout(() => navigate('/login'), 2000);
 
     } catch (err) {
-      // Handle errors from the API (like "user already exists")
       const errorMessage = err.response?.data?.errors?.[0]?.message || 'An unexpected error occurred during signup.';
       setError(errorMessage);
     }

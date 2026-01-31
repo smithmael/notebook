@@ -1,38 +1,44 @@
-import React from 'react';
-import { Box, IconButton } from '@mui/material';
-import RemoveRedEye from '@mui/icons-material/RemoveRedEye';
-import Delete from '@mui/icons-material/Delete';
-import Edit from '@mui/icons-material/Edit';
+import React from "react";
+import { Box, IconButton } from "@mui/material";
+import RemoveRedEye from "@mui/icons-material/RemoveRedEye";
+import Delete from "@mui/icons-material/Delete";
+import Edit from "@mui/icons-material/Edit";
 
 /**
- * A reusable component for rendering a consistent set of action icon buttons.
- * It conditionally renders each button based on the handler function provided.
- * @param {object} row - The data for the current table row.
- * @param {function} onView - Function to call when the view button is clicked.
- * @param {function} onEdit - Function to call when the edit button is clicked.
- * @param {function} onDelete - Function to call when the delete button is clicked.
+ * Reusable action buttons for a table row.
+ * - Only renders a button if the corresponding handler is provided.
+ *
+ * @param {object}   props.row      - Current row data.
+ * @param {function} props.onView   - Called as onView(row).
+ * @param {function} props.onEdit   - Called as onEdit(row).
+ * @param {function} props.onDelete - Called as onDelete(row.id).
  */
 const ActionButtons = ({ row, onView, onEdit, onDelete }) => {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-      {/* View Button: Only renders if an `onView` function is passed as a prop */}
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
       {onView && (
-        <IconButton size="small" onClick={() => onView(row)} title="View Details">
-          <RemoveRedEye sx={{ color: '#6B7280' }} />
+        <IconButton
+          size="small"
+          onClick={() => onView(row)}
+          title="View Details"
+        >
+          <RemoveRedEye sx={{ color: "#6B7280" }} />
         </IconButton>
       )}
 
-      {/* Edit Button: Only renders if an `onEdit` function is passed as a prop */}
       {onEdit && (
         <IconButton size="small" onClick={() => onEdit(row)} title="Edit">
-          <Edit sx={{ color: '#3B82F6' }} />
+          <Edit sx={{ color: "#3B82F6" }} />
         </IconButton>
       )}
-      
-      {/* Delete Button: Only renders if an `onDelete` function is passed as a prop */}
+
       {onDelete && (
-        <IconButton size="small" onClick={() => onDelete(row.id)} title="Delete">
-          <Delete sx={{ color: '#EF4444' }} />
+        <IconButton
+          size="small"
+          onClick={() => onDelete(row.id)}
+          title="Delete"
+        >
+          <Delete sx={{ color: "#EF4444" }} />
         </IconButton>
       )}
     </Box>

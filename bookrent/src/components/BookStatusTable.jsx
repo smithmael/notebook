@@ -1,534 +1,224 @@
-import React, { useMemo, useState, useEffect } from "react";
+// src/components/BookStatusTable.jsx
+import React, { useMemo, useState } from "react";
 import {
-  Avatar,
   Box,
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormControlLabel,
-  FormGroup,
   IconButton,
-  MenuItem,
   Paper,
-  Popover,
-  Select,
   Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Tooltip,
   Typography,
+  Popover,
+  Menu,
+  MenuItem,
 } from "@mui/material";
-import { styled } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
+import axios from "axios";
 
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
-import SortOutlinedIcon from "@mui/icons-material/SortOutlined";
-import ViewListOutlinedIcon from "@mui/icons-material/ViewListOutlined";
-import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 
-const GreyBadge = styled("span")(({ theme }) => ({
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "4px 10px",
-  borderRadius: 999,
-  background: theme.palette.mode === "dark" ? "#2b2f3b" : "#f3f4f6",
-  color: theme.palette.text.secondary,
-  fontSize: 12,
-  fontWeight: 600,
-}));
-
-const StatusDot = ({ color }) => (
-  <span
-    style={{
-      display: "inline-block",
-      width: 8,
-      height: 8,
-      borderRadius: "50%",
-      background: color,
-      marginRight: 8,
-    }}
-  />
-);
+const API_URL = "http://localhost:5000/api";
 
 export default function BookStatusTable({
   title = "Live Book Status",
   rows = [],
-  onRowsChange,              // required for edit/delete to persist
-  pageSizeOptions = [8, 10],
-  enableActions = true,      // set false if you want to hide Edit/Delete
-
+  onRowsChange,
 }) {
-  // toolbar state (icon-only like your UI)
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [density, setDensity] = useState("standard");
-  const [sortModel, setSortModel] = useState([{ field: "id", sort: "asc" }]);
-  const [columnVisibilityModel, setColumnVisibilityModel] = useState({
-    id: true,
-    bookNo: true,
-    owner: true,
-    status: true,
-    price: true,
-    actions: enableActions,
-  });
-
-  // popovers
+  const [search, setSearch] = useState("");
   const [anchorSearch, setAnchorSearch] = useState(null);
-  const [anchorSort, setAnchorSort] = useState(null);
-  const [anchorView, setAnchorView] = useState(null);
   const [anchorFilter, setAnchorFilter] = useState(null);
-
-  // edit/delete dialogs
-  const [editOpen, setEditOpen] = useState(false);
-  const [editingRow, setEditingRow] = useState(null);
-  const [confirm, setConfirm] = useState({ open: false, id: null });
-
-  // unique owners for edit select
-  const ownerOptions = useMemo(() => {
-    const map = new Map();
-    rows.forEach((r) => {
-      if (r.owner) map.set(r.owner.id ?? r.owner.name, r.owner);
-    });
-    return Array.from(map.values());
-  }, [rows]);
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
-      const matchQ =
-        !q ||
-        r.bookNo?.toLowerCase().includes(q) ||
-        r.owner?.name?.toLowerCase().includes(q);
-      const matchS = statusFilter === "All" || r.status === statusFilter;
-      return matchQ && matchS;
-    });
-  }, [rows, query, statusFilter]);
+    let result = rows;
 
-  // columns
+    if (search) {
+      result = result.filter((r) =>
+        r.title?.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    if (filterStatus !== "all") {
+      result = result.filter((r) => r.status === filterStatus);
+    }
+
+    return result;
+  }, [rows, search, filterStatus]);
+
+  const handleApprove = async (id) => {
+    if (!window.confirm("Approve this book?")) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res = await axios.post(
+        `${API_URL}/admin/books/${id}/approve`,
+        null,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      onRowsChange?.(
+        rows.map((b) => (b.id === res.data.id ? res.data : b))
+      );
+    } catch (err) {
+      alert("Failed to approve");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this book?")) return;
+    const token = localStorage.getItem("token");
+    try {
+      await axios.delete(`${API_URL}/admin/books/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      onRowsChange?.(rows.filter((b) => b.id !== id));
+    } catch (err) {
+      alert("Delete failed");
+    }
+  };
+
   const columns = [
-    {
-      field: "id",
-      headerName: "No.",
-      width: 80,
-      valueFormatter: (p) => String(p.value).padStart(2, "0"),
-    },
-    {
-      field: "bookNo",
-      headerName: "Book no.",
-      width: 120,
-      renderCell: (params) => <GreyBadge>{params.value}</GreyBadge>,
-    },
-    {
-      field: "owner",
-      headerName: "Owner",
-      flex: 1.2,
-      minWidth: 180,
-      sortable: true,
-      sortComparator: (a, b) => (a?.name || "").localeCompare(b?.name || ""),
-      renderCell: (params) => {
-        const o = params.value || {};
-        return (
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Avatar src={o.avatar} alt="" sx={{ width: 28, height: 28 }} />
-            <Typography variant="body2" color="text.secondary">
-              {o.name || ""}
-            </Typography>
-          </Stack>
-        );
-      },
-    },
+    { field: "id", headerName: "No.", width: 80 },
+    { field: "title", headerName: "Book Name", flex: 1 },
+    { field: "author", headerName: "Author", width: 150 },
     {
       field: "status",
       headerName: "Status",
-      width: 160,
+      width: 120,
       renderCell: (params) => {
-        const rented = params.value === "Rented";
+        const status = params.value;
+        const color =
+          status === "approved"
+            ? "#4caf50"
+            : status === "pending"
+            ? "#ff9800"
+            : status === "rented"
+            ? "#2196f3"
+            : "#f44336";
         return (
-          <Stack direction="row" alignItems="center">
-            <StatusDot color={rented ? "#ef4444" : "#3b82f6"} />
-            <Typography variant="body2" color="text.secondary">
-              {params.value}
-            </Typography>
-          </Stack>
+          <Box
+            sx={{
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              backgroundColor: color,
+              display: "inline-block",
+              mr: 1,
+            }}
+          />
         );
       },
     },
     {
-      field: "price",
+      field: "rentPrice",
       headerName: "Price",
-      width: 120,
-      renderCell: (params) => (
-        <Typography variant="body2" color="text.secondary">
-          {Number(params.value || 0).toFixed(1)} Birr
-        </Typography>
-      ),
+      width: 100,
+      renderCell: (params) => `${Number(params.value || 0).toFixed(2)} Birr`,
+    },
+    {
+      field: "actions",
+      headerName: "Action",
+      width: 140,
+      sortable: false,
+      renderCell: (params) => {
+        const row = params.row;
+        return (
+          <Stack direction="row" spacing={0.5}>
+            <Tooltip title="View">
+              <IconButton size="small" onClick={() => alert(JSON.stringify(row, null, 2))}>
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Edit">
+              <IconButton size="small" color="primary">
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete">
+              <IconButton size="small" color="error" onClick={() => handleDelete(row.id)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        );
+      },
     },
   ];
 
-  if (enableActions) {
-    columns.push({
-      field: "actions",
-      headerName: "",
-      width: 92,
-      sortable: false,
-      filterable: false,
-      align: "center",
-      headerAlign: "center",
-      renderCell: (params) => (
-        <Stack direction="row" spacing={0.5}>
-          <Tooltip title="Edit">
-            <IconButton
-              size="small"
-              color="primary"
-              onClick={() => {
-                setEditingRow(params.row);
-                setEditOpen(true);
-              }}
-              aria-label="Edit"
-            >
-              <EditOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => setConfirm({ open: true, id: params.row.id })}
-              aria-label="Delete"
-            >
-              <DeleteOutlineOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      ),
-    });
-  }
-
-  // handlers
-  const saveEdit = (updated) => {
-    if (!onRowsChange) return;
-    const next = rows.map((r) => (r.id === updated.id ? updated : r));
-    onRowsChange(next);
-    setEditOpen(false);
-  };
-  const confirmDelete = () => {
-    if (!onRowsChange) return;
-    const next = rows.filter((r) => r.id !== confirm.id);
-    onRowsChange(next);
-    setConfirm({ open: false, id: null });
-  };
-
-  // sort popover fields
-  const sortFields = [
-    { field: "id", label: "No." },
-    { field: "bookNo", label: "Book no." },
-    { field: "owner", label: "Owner" },
-    { field: "status", label: "Status" },
-    { field: "price", label: "Price" },
-  ];
-  const selectedSortField = sortModel?.[0]?.field || "id";
-  const selectedSortDir = sortModel?.[0]?.sort || "asc";
-
   return (
-    <Paper elevation={1} sx={{ p: 2.5, borderRadius: 3, height: "100%"}}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-        <Typography fontWeight={700}>{title}</Typography>
+    <Paper elevation={3} sx={{ p: 3, borderRadius: 3, height: "100%" }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h6" fontWeight={700}>
+          {title}
+        </Typography>
 
-        <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack direction="row" spacing={1}>
+          {/* Search */}
           <Tooltip title="Search">
-            <IconButton onClick={(e) => setAnchorSearch(e.currentTarget)} size="small">
-              <SearchOutlinedIcon fontSize="small" />
+            <IconButton onClick={(e) => setAnchorSearch(e.currentTarget)}>
+              <SearchOutlinedIcon />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Sort">
-            <IconButton onClick={(e) => setAnchorSort(e.currentTarget)} size="small">
-              <SortOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="View">
-            <IconButton onClick={(e) => setAnchorView(e.currentTarget)} size="small">
-              <ViewListOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Filter">
-            <IconButton onClick={(e) => setAnchorFilter(e.currentTarget)} size="small">
-              <TuneOutlinedIcon fontSize="small" />
+
+          {/* Filter */}
+          <Tooltip title="Filter by status">
+            <IconButton onClick={(e) => setAnchorFilter(e.currentTarget)}>
+              <FilterListIcon />
             </IconButton>
           </Tooltip>
         </Stack>
       </Stack>
 
-      <Box sx={{ height: 420, width: "100%" }}>
+      <Box sx={{ height: 400, width: "100%" }}>
         <DataGrid
           rows={filteredRows}
           columns={columns}
-          density={density}
-          columnVisibilityModel={columnVisibilityModel}
-          onColumnVisibilityModelChange={(m) => setColumnVisibilityModel(m)}
-          sortModel={sortModel}
-          onSortModelChange={(m) => setSortModel(m)}
-          pageSizeOptions={pageSizeOptions}
-          initialState={{
-            pagination: { paginationModel: { pageSize: pageSizeOptions[0], page: 0 } },
-          }}
+          pageSizeOptions={[8, 10, 20]}
           disableRowSelectionOnClick
-          sx={{
-            "& .MuiDataGrid-columnHeaders": { backgroundColor: "background.paper" },
-            "& .MuiDataGrid-cell": { alignItems: "center" },
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 2,
-          }}
         />
       </Box>
 
-      {/* Search */}
+      {/* Search Popover */}
       <Popover
         open={Boolean(anchorSearch)}
         anchorEl={anchorSearch}
         onClose={() => setAnchorSearch(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
-        PaperProps={{ sx: { p: 2, width: 300 } }}
       >
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Search
-        </Typography>
-        <TextField
-          autoFocus
-          fullWidth
-          size="small"
-          placeholder="Book no. or Owner"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <Box sx={{ p: 2, width: 300 }}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search books..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            autoFocus
+          />
+        </Box>
       </Popover>
 
-      {/* Sort */}
-      <Popover
-        open={Boolean(anchorSort)}
-        anchorEl={anchorSort}
-        onClose={() => setAnchorSort(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-        PaperProps={{ sx: { p: 2, width: 300 } }}
-      >
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Sort
-        </Typography>
-        <FormControl size="small" fullWidth sx={{ mb: 1 }}>
-          <Select
-            value={selectedSortField}
-            onChange={(e) => setSortModel([{ field: e.target.value, sort: selectedSortDir }])}
-          >
-            {sortFields.map((s) => (
-              <MenuItem key={s.field} value={s.field}>
-                {s.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={selectedSortDir}
-          onChange={(_, val) => val && setSortModel([{ field: selectedSortField, sort: val }])}
-        >
-          <ToggleButton value="asc">Asc</ToggleButton>
-          <ToggleButton value="desc">Desc</ToggleButton>
-        </ToggleButtonGroup>
-      </Popover>
-
-      {/* View */}
-      <Popover
-        open={Boolean(anchorView)}
-        anchorEl={anchorView}
-        onClose={() => setAnchorView(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-        PaperProps={{ sx: { p: 2, width: 320 } }}
-      >
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          View
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Row density
-        </Typography>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={density}
-          onChange={(_, val) => val && setDensity(val)}
-          sx={{ my: 1 }}
-        >
-          <ToggleButton value="compact">Compact</ToggleButton>
-          <ToggleButton value="standard">Standard</ToggleButton>
-          <ToggleButton value="comfortable">Comfort</ToggleButton>
-        </ToggleButtonGroup>
-
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-          Columns
-        </Typography>
-        <FormGroup sx={{ mt: 0.5 }}>
-          {["id", "bookNo", "owner", "status", "price"].map((f) => (
-            <FormControlLabel
-              key={f}
-              control={
-                <Checkbox
-                  size="small"
-                  checked={Boolean(columnVisibilityModel[f])}
-                  onChange={(e) =>
-                    setColumnVisibilityModel((m) => ({ ...m, [f]: e.target.checked }))
-                  }
-                />
-              }
-              label={{ id: "No.", bookNo: "Book no.", owner: "Owner", status: "Status", price: "Price" }[f]}
-            />
-          ))}
-        </FormGroup>
-      </Popover>
-
-      {/* Filter */}
-      <Popover
-        open={Boolean(anchorFilter)}
+      {/* Filter Menu */}
+      <Menu
         anchorEl={anchorFilter}
+        open={Boolean(anchorFilter)}
         onClose={() => setAnchorFilter(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-        PaperProps={{ sx: { p: 2, width: 300 } }}
       >
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Filters
-        </Typography>
-        <FormControl fullWidth size="small">
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            {["All", "Rented", "Free"].map((s) => (
-              <MenuItem key={s} value={s}>
-                {s}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Popover>
-
-      {/* Edit dialog */}
-      <EditRowDialog
-        open={editOpen}
-        initial={editingRow}
-        ownerOptions={ownerOptions}
-        onClose={() => setEditOpen(false)}
-        onSave={saveEdit}
-      />
-
-      {/* Delete confirm */}
-      <ConfirmDialog
-        open={confirm.open}
-        title="Delete record?"
-        description="This action cannot be undone."
-        onCancel={() => setConfirm({ open: false, id: null })}
-        onConfirm={confirmDelete}
-      />
+        <MenuItem onClick={() => { setFilterStatus("all"); setAnchorFilter(null); }}>
+          All
+        </MenuItem>
+        <MenuItem onClick={() => { setFilterStatus("pending"); setAnchorFilter(null); }}>
+          Pending
+        </MenuItem>
+        <MenuItem onClick={() => { setFilterStatus("approved"); setAnchorFilter(null); }}>
+          Approved
+        </MenuItem>
+        <MenuItem onClick={() => { setFilterStatus("rented"); setAnchorFilter(null); }}>
+          Rented
+        </MenuItem>
+      </Menu>
     </Paper>
-  );
-}
-
-/* ---------- Edit dialog ---------- */
-function EditRowDialog({ open, onClose, onSave, initial, ownerOptions = [] }) {
-  const [v, setV] = useState(
-    initial || { id: undefined, bookNo: "", owner: ownerOptions[0], status: "Free", price: 0 }
-  );
-  useEffect(() => {
-    setV(initial || { id: undefined, bookNo: "", owner: ownerOptions[0], status: "Free", price: 0 });
-  }, [initial, open, ownerOptions]);
-
-  const canSave = v?.bookNo?.trim() && v?.owner && v?.status;
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Edit</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ mt: 0.5 }}>
-          <TextField
-            label="Book no."
-            value={v.bookNo || ""}
-            onChange={(e) => setV((s) => ({ ...s, bookNo: e.target.value }))}
-          />
-          <FormControl fullWidth>
-            <Select
-              value={v.owner?.id ?? v.owner?.name ?? ""}
-              onChange={(e) => {
-                const next =
-                  ownerOptions.find((o) => (o.id ?? o.name) === e.target.value) || ownerOptions[0];
-                setV((s) => ({ ...s, owner: next }));
-              }}
-              displayEmpty
-            >
-              {ownerOptions.map((o) => (
-                <MenuItem key={o.id ?? o.name} value={o.id ?? o.name}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Avatar src={o.avatar} sx={{ width: 24, height: 24 }} />
-                    <span>{o.name}</span>
-                  </Stack>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth>
-            <Select
-              value={v.status || "Free"}
-              onChange={(e) => setV((s) => ({ ...s, status: e.target.value }))}
-            >
-              {["Rented", "Free"].map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            label="Price (Birr)"
-            type="number"
-            inputProps={{ step: "0.1" }}
-            value={v.price ?? 0}
-            onChange={(e) => setV((s) => ({ ...s, price: Number(e.target.value) }))}
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="contained"
-          disabled={!canSave}
-          onClick={() => onSave(v)}
-        >
-          Save
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-/* ---------- Confirm dialog ---------- */
-function ConfirmDialog({ open, title, description, onCancel, onConfirm }) {
-  return (
-    <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent dividers>
-        <Typography color="text.secondary">{description}</Typography>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel}>Cancel</Button>
-        <Button color="error" variant="contained" onClick={onConfirm}>
-          Delete
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 }

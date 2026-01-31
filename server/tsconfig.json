@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "typeRoots": ["./node_modules/@types", "./src/types"],
+  
+    "allowJs": true,           // <--- THIS IS THE KEY
+    "checkJs": false,          // Set to true if you want TS to check errors in JS files too
+    
+    "outDir": "./dist",
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "*.ts", "*.js"], 
+  "exclude": ["node_modules"]
+}

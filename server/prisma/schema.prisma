@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+  OWNER
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  name      String?
+  location  String?
+  phone     String?
+  status    String   @default("active")
+  wallet    Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  books     Book[]
+  rentals   Rental[]
+
+  @@map("users")
+}
+
+model Book {
+  id              Int      @id @default(autoincrement())
+  title           String
+  author          String
+  category        String
+  rentPrice       Float
+  totalCopies     Int      @default(1)
+  availableCopies Int      @default(1)
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ownerId Int
+  owner   User    @relation(fields: [ownerId], references: [id])
+  rentals Rental[]
+
+  @@map("books")
+}
+
+model Rental {
+  id          Int      @id @default(autoincrement())
+  price       Float
+  dueDate     DateTime
+  returnDate  DateTime?
+  isReturned  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bookId   Int
+  book     Book   @relation(fields: [bookId], references: [id])
+  renterId Int
+  renter   User   @relation(fields: [renterId], references: [id])
+
+  @@map("rentals")
+}

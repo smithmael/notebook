@@ -3,34 +3,40 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
-/**
- * A reusable hook for managing data table state including fetching, searching, and filtering.
- * @param {string} endpoint - The API endpoint to fetch data from (e.g., '/owners').
- */
 export const useDataTable = (endpoint) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
-  // You can add more filters here later if needed
-  // const [filters, setFilters] = useState({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const token = localStorage.getItem('token'); // Get Token
+
     try {
-      const params = {
-        search: searchText,
-        // ...filters,
-      };
+      const params = { search: searchText };
       
-      const response = await axios.get(`${API_URL}${endpoint}`, { params });
-      setData(response.data);
+      const response = await axios.get(`${API_URL}${endpoint}`, { 
+        params,
+        headers: { Authorization: `Bearer ${token}` } // Send Token
+      });
+      
+      // FIX: Handle Prisma 5 Pagination Response
+      // If server returns { data: [...], total: 10 }, we want the array in 'data'
+      if (response.data && Array.isArray(response.data.data)) {
+        setData(response.data.data);
+      } else if (Array.isArray(response.data)) {
+        // If server returns just [...] (like Owners list)
+        setData(response.data);
+      } else {
+        setData([]);
+      }
     } catch (error) {
       console.error(`Failed to fetch data from ${endpoint}:`, error);
       setData([]);
     } finally {
       setLoading(false);
     }
-  }, [endpoint, searchText/*, filters*/]);
+  }, [endpoint, searchText]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
