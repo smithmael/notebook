@@ -1,19 +1,12 @@
-import {
-  AbilityBuilder,
-  createMongoAbility,
-  MongoAbility,
-  InferSubjects,
-} from '@casl/ability';
-import type { User as PrismaUser, Book as PrismaBook } from '@prisma/client';
+import { AbilityBuilder, createMongoAbility, MongoAbility, InferSubjects } from '@casl/ability';
+import { SharedUser, SharedBook } from '../../../shared/types/index';
 
 export type Actions = 'manage' | 'create' | 'read' | 'update' | 'delete';
-
-// This union allows CASL to validate properties like 'ownerId' against the Prisma types
-type Subjects = InferSubjects<PrismaBook | PrismaUser> | 'Book' | 'User' | 'OwnerRevenue' | 'all';
+type Subjects = InferSubjects<SharedBook | SharedUser> | 'Book' | 'User' | 'OwnerRevenue' | 'all';
 
 export type AppAbility = MongoAbility<[Actions, Subjects]>;
 
-function Ability(user: PrismaUser | null): AppAbility {
+export function defineAbilityFor(user: SharedUser | null): AppAbility {
   const { can, cannot, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
 
   if (!user) {
@@ -26,14 +19,10 @@ function Ability(user: PrismaUser | null): AppAbility {
   } else if (user.role === 'OWNER') {
     can('read', 'Book');
     can('create', 'Book');
-    can('read', 'OwnerRevenue');
-
-    // These will now work because 'Book' is associated with PrismaBook's properties
     can(['update', 'delete'], 'Book', { ownerId: user.id });
+    can('read', 'OwnerRevenue');
     can('update', 'User', { id: user.id });
   }
 
   return build();
 }
-
-export default Ability;

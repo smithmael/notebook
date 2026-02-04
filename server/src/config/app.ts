@@ -7,7 +7,7 @@ import routes from '../routes';
 import { errorHandler, notFoundHandler } from '../middlewares/error.middleware';
 import prisma from '../lib/prisma'; // ✅ DEFAULT IMPORT
 import { ENV } from './env';
-
+import analyticsRoutes from '../routes/analytics.routes'
 const app: Application = express();
 
 // Middleware
@@ -43,7 +43,7 @@ prisma.$connect()
 
 // Routes
 app.use('/api', routes);
-
+app.use('/api/analytics', analyticsRoutes)
 // Error Handling
 app.use(notFoundHandler);
 app.use(errorHandler);

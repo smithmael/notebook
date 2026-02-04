@@ -1,4 +1,4 @@
-// index.d.ts
+// index.type.ts
 import "@prisma/client";
 
 declare module "@prisma/client" {

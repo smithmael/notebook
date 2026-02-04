@@ -4,8 +4,9 @@ import { ENV } from '../config/env'
 import { UnauthorizedError, ForbiddenError } from '../utils/error'
 import prisma from '../config/database'
 import type { User } from '@prisma/client'
+import { Role } from '@prisma/client'
 
-type Role = User['role']
+
 
 declare module 'express' {
   interface Request {

@@ -1,80 +1,122 @@
-import prisma from '../config/database';
-import { RentalRepository } from '../repositories/rental.repository';
-import { BookRepository } from '../repositories/book.repository';
-import { Rental } from '@prisma/client';
-import { BadRequestError, NotFoundError } from '../utils/error';
+import prisma from '../config/database'
+import { ForbiddenError } from '../utils/error'
 
-const rentalRepo = new RentalRepository(prisma);
-const bookRepo = new BookRepository(prisma);
+const LATE_FEE_PER_DAY = 10 // birr
 
-/**
- * Rent a book
- */
-export const createRental = async (data: {
-  renterId: number;
-  bookId: number;
-  durationDays?: number;
-}) => {
-  const book = await bookRepo.getById(data.bookId);
+export const rentBookService = async (
+  userId: number,
+  bookId: number,
+  dueDate: Date
+) => {
+  const book = await prisma.book.findUnique({
+    where: { id: bookId },
+    include: { owner: true }
+  })
 
-  if (!book) throw new NotFoundError('Book not found');
-  if (book.availableCopies < 1) throw new BadRequestError('Book is out of stock');
+  if (!book || book.status !== 'active')
+    throw new ForbiddenError('Book not available')
 
-  const duration = data.durationDays || 7;
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + duration);
+  if (book.availableCopies <= 0)
+    throw new ForbiddenError('No copies available')
 
-  // Use a transaction to ensure stock is updated only if rental succeeds
+  if (book.ownerId === userId)
+    throw new ForbiddenError('You cannot rent your own book')
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId }
+  })
+
+  if (!user || user.wallet < book.rentPrice)
+    throw new ForbiddenError('Insufficient wallet balance')
+
   return prisma.$transaction(async (tx) => {
-    // 1. Decrement stock
-    await tx.book.update({
-      where: { id: data.bookId },
-      data: { availableCopies: { decrement: 1 } }
-    });
-
-    // 2. Create Rental
-    return tx.rental.create({
+    const rental = await tx.rental.create({
       data: {
-        renterId: data.renterId,
-        bookId: data.bookId,
+        bookId,
+        renterId: userId,
         price: book.rentPrice,
-        dueDate: dueDate,
-        // REMOVED: status: 'active' (field does not exist in schema)
+        dueDate
       }
-    });
-  });
-};
+    })
 
-/**
- * Get rentals for a specific user (Renter)
- */
-export const getMyRentals = async (userId: number): Promise<Rental[]> => {
-  return rentalRepo.getRentalsByUserId(userId);
-};
-
-/**
- * Get rentals for an Owner (books owned by this user)
- */
-export const getOwnerRentals = async (ownerId: number) => {
-  return prisma.rental.findMany({
-    where: {
-      book: {
-        ownerId: ownerId
+    await tx.book.update({
+      where: { id: bookId },
+      data: {
+        availableCopies: { decrement: 1 }
       }
-    },
-    include: {
-      book: true,
-      renter: {
-        select: { id: true, name: true, email: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-};
+    })
 
-/**
- * Get Rental Statistics (Admin/Owner)
- */
-export const getRentalAnalytics = async () => {
-  return rentalRepo.getRentalStats();
-};
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        wallet: { decrement: book.rentPrice }
+      }
+    })
+
+    await tx.user.update({
+      where: { id: book.ownerId },
+      data: {
+        wallet: { increment: book.rentPrice }
+      }
+    })
+
+    return rental
+  })
+}
+
+export const returnBookService = async (
+  userId: number,
+  rentalId: number
+) => {
+  const rental = await prisma.rental.findUnique({
+    where: { id: rentalId },
+    include: { book: true }
+  })
+
+  if (!rental)
+    throw new ForbiddenError('Rental not found')
+
+  if (rental.renterId !== userId)
+    throw new ForbiddenError('Unauthorized return attempt')
+
+  if (rental.isReturned)
+    throw new ForbiddenError('Book already returned')
+
+  const now = new Date()
+  let lateFee = 0
+
+  if (now > rental.dueDate) {
+    const daysLate = Math.ceil(
+      (now.getTime() - rental.dueDate.getTime()) / (1000 * 60 * 60 * 24)
+    )
+    lateFee = daysLate * LATE_FEE_PER_DAY
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.rental.update({
+      where: { id: rentalId },
+      data: {
+        isReturned: true,
+        returnDate: now
+      }
+    })
+
+    await tx.book.update({
+      where: { id: rental.bookId },
+      data: {
+        availableCopies: { increment: 1 }
+      }
+    })
+
+    if (lateFee > 0) {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          wallet: { decrement: lateFee }
+        }
+      })
+    }
+
+    return { lateFee }
+  })
+}
