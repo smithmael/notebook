@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Box, Table, TableBody, TableCell, TableContainer, TableHead, 
   TableRow, Paper, IconButton, TextField, Typography,
-  Menu, MenuItem,   Grid, Card, CardContent, Button 
+  Menu, MenuItem, Grid, Card, CardContent, Button 
 } from '@mui/material'; 
 import { 
   Search as SearchIcon, FilterList as FilterIcon, 
@@ -18,19 +18,15 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Rented' | 'Free'>('ALL');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
-  // ✅ FIX 1: Safe URL Builder (No more handleRead function)
   const getBookUrl = (book: any) => {
     if (!book?.bookFile) return "#";
-    // If it's a direct Cloudinary/External link
     if (book.bookFile.startsWith('http')) return book.bookFile;
     
-    // Fallback for local storage paths
     const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     const cleanPath = book.bookFile.startsWith('/') ? book.bookFile : `/${book.bookFile}`;
     return `${backendUrl}${cleanPath}`;
   };
 
-  // ✅ FIX 2: Added optional chaining to 'books' to prevent 500 error crashes
   const displayBooks = (books || []).filter(b => {
     const bookStatus = b.availableCopies < b.totalCopies ? 'Rented' : 'Free';
     const matchesSearch = (b.title || "").toLowerCase().includes(searchTerm.toLowerCase());
@@ -39,12 +35,12 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
   });
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Delete this book?")) {
+    if (window.confirm("Are you sure you want to delete this book?")) {
       try {
         await api.delete(`/books/${id}`);
         onRefresh(); 
       } catch (err) {
-        console.error("Delete failed");
+        console.error("Delete failed:", err);
       }
     }
   };
@@ -78,26 +74,30 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
               </TableRow>
             </TableHead>
             <TableBody>
-              {/* ✅ FIX 3: Optional chaining on displayBooks */}
               {displayBooks?.map((book, i) => (
                 <TableRow key={book?.id || i}>
                   <TableCell>{i + 1}</TableCell>
                   <TableCell sx={{ fontWeight: 500 }}>{book?.title || "Unknown"}</TableCell>
                   <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: book?.availableCopies < book?.totalCopies ? '#FF4842' : '#00A3FF' }}>
-                      <DotIcon sx={{ fontSize: 10 }} /> {book?.availableCopies < book?.totalCopies ? 'Rented' : 'Free'}
+                    <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 0.5, 
+                        color: book?.availableCopies < book?.totalCopies ? '#FF4842' : '#00A3FF' 
+                    }}>
+                      <DotIcon sx={{ fontSize: 10 }} /> 
+                      {book?.availableCopies < book?.totalCopies ? 'Rented' : 'Free'}
                     </Box>
                   </TableCell>
                   <TableCell>
-                    {/* ✅ FIX 4: component="a" bypasses pop-up blocker 100% */}
                     <IconButton 
                       size="small" 
                       color="primary" 
                       component="a" 
                       href={getBookUrl(book)} 
                       target="_blank" 
-                      rel="noopener noreferrer"
-                      disabled={!book?.bookFile}
+                      rel="noopener noreferrer nofollow"
+                      disabled={!book?.bookFile || book.bookFile === "#"}
                     >
                       <ReadIcon fontSize="small" />
                     </IconButton>
@@ -113,20 +113,20 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
       ) : (
         <Grid container spacing={2}>
           {displayBooks?.map((book) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={book?.id}>
+            /* ✅ FIX: MUI v6 Grid syntax (Removed 'item', used 'size' object) */
+            <Grid key={book?.id} size={{ xs: 12, sm: 6, md: 4 }}>
               <Card variant="outlined" sx={{ borderRadius: 2 }}>
                 <CardContent>
                   <Typography fontWeight="bold" noWrap>{book?.title || "Unknown"}</Typography>
                   <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-                    {/* ✅ FIX 5: Button as direct link */}
                     <Button 
                       size="small" 
                       startIcon={<ReadIcon />} 
                       component="a" 
                       href={getBookUrl(book)} 
                       target="_blank" 
-                      rel="noopener noreferrer"
-                      disabled={!book?.bookFile}
+                      rel="noopener noreferrer nofollow"
+                      disabled={!book?.bookFile || book.bookFile === "#"}
                     >
                       Read
                     </Button>
