@@ -1,24 +1,33 @@
-import prisma from '../config/database';
-import { Prisma } from '@prisma/client'; // Import Prisma namespace
+// server/src/services/stats.service.ts
+import prisma from '../lib/prisma';
 
-export const getRevenueChart = async (userId: number, role: string) => {
-  // Use Prisma.sql helper, not prisma.sql instance method
-  const whereSql = role === 'OWNER' 
-    ? Prisma.sql`WHERE "ownerId" = ${userId}` 
-    : Prisma.sql``;
+export const getMonthlyEarnings = async (userId: number, role: string) => {
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
 
-  // Ensure table name case matches your DB (usually "Rental" or "rentals")
-  const data: any[] = await prisma.$queryRaw`
-    SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'Mon') as name, SUM(price) as "current"
-    FROM "Rental" ${whereSql}
-    GROUP BY 1, DATE_TRUNC('month', "createdAt")
-    ORDER BY DATE_TRUNC('month', "createdAt") LIMIT 6;
-  `;
-  
-  return data.map(d => ({ 
-    ...d, 
-    current: Number(d.current),
-    // Mocking previous data for chart comparison
-    previous: Number(d.current) * (Math.random() * 0.5 + 0.6) 
+  // ✅ FIX: If no rentals exist, let's at least show book values for the chart
+  const books = await prisma.book.findMany({
+    where: {
+      ownerId: userId,
+      createdAt: { gte: sixMonthsAgo }
+    },
+    select: { rentPrice: true, createdAt: true }
+  });
+
+  const months = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    return d.toLocaleString('default', { month: 'short' });
+  }).reverse();
+
+  const earningsMap = books.reduce((acc: any, curr) => {
+    const month = curr.createdAt.toLocaleString('default', { month: 'short' });
+    acc[month] = (acc[month] || 0) + Number(curr.rentPrice);
+    return acc;
+  }, {});
+
+  return months.map(month => ({
+    month,
+    amount: earningsMap[month] || 0 
   }));
 };

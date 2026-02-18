@@ -1,9 +1,10 @@
-import 'dotenv/config'
-import app from './src/config/app';  
-import { ENV } from './src/config/env';
+// server/index.ts
+import { ENV } from './src/config/env'; // Load this FIRST - it handles the path logic
+import app from './src/config/app';     
 
-const PORT = ENV.PORT
+const PORT = ENV.PORT;
+
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
-})
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🔗 CORS Origin: ${ENV.CORS_ORIGIN}`);
+});

@@ -1,10 +1,11 @@
+//server/src/middlewares/auth.middleware.ts
+
 import { Request, Response, NextFunction, RequestHandler } from 'express'
 import jwt from 'jsonwebtoken'
 import { ENV } from '../config/env'
 import { UnauthorizedError, ForbiddenError } from '../utils/error'
 import prisma from '../config/database'
-import type { User } from '@prisma/client'
-import { Role } from '@prisma/client'
+import { Role, User } from '../generated/client/client';
 
 
 
@@ -17,41 +18,41 @@ declare module 'express' {
   }
 }
 
+
+// server/src/middleware/auth.ts
 export const authenticate = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  const authHeader = req.headers.authorization
-  if (!authHeader?.startsWith('Bearer ')) 
-    throw new UnauthorizedError('Authentication required')
-
-  const token = authHeader.split(' ')[1]!
   try {
-    const decoded = jwt.verify(token, ENV.JWT_SECRET!) as {
-      id: number
-      role: Role
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+       return next(new UnauthorizedError('Authentication required'));
     }
-    
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, role: true }
-    })
-    
-    if (!user) throw new UnauthorizedError('User no longer exists')
 
-    req.user = { 
-      id: user.id, 
-      role: user.role 
-    }
-    next()
+    const token = authHeader.split(' ')[1]!;
+    
+    // Use the secret from your .env via your config
+    const decoded = jwt.verify(token, ENV.JWT_SECRET!) as { id: any; role: Role };
+    
+    // ✅ CRITICAL: Convert to Number because schema says "id Int"
+    const userId = Number(decoded.id);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true }
+    });
+    
+    if (!user) return next(new UnauthorizedError('User no longer exists'));
+
+    req.user = { id: user.id, role: user.role };
+    next();
   } catch (err) {
-    if (err instanceof jwt.JsonWebTokenError || err instanceof jwt.TokenExpiredError) {
-      throw new UnauthorizedError('Invalid or expired token')
-    }
-    throw new UnauthorizedError('Authentication failed')
+    // This catches expired tokens or invalid signatures
+    next(new UnauthorizedError('Session invalid or expired'));
   }
-}
+};
 
 export const authorize = (...allowedRoles: Role[]): RequestHandler => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {

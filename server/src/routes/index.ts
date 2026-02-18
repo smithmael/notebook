@@ -3,12 +3,11 @@ import { Router } from 'express'
 import authRoutes from './auth.routes'
 import bookRoutes from './book.routes'
 import ownerRoutes from './owner.routes'
-
+import dashboardRoutes from './dashboard.routes'; // or wherever it lives
 const router = Router()
-
 // Mount all your application routes
 router.use('/auth', authRoutes)
 router.use('/books', bookRoutes)
 router.use('/owner', ownerRoutes)
-
+router.use('/dashboard', dashboardRoutes);
 export default router

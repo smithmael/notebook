@@ -1,0 +1,82 @@
+// server/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js" // Standard for V7
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+  OWNER
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  name      String?
+  location  String?
+  phone     String?
+  status    String   @default("active")
+  wallet    Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  books   Book[]
+  rentals Rental[]
+
+  @@map("users")
+}
+
+model Book {
+  id              Int     @id @default(autoincrement())
+  title           String
+  author          String
+  category        String
+  rentPrice       Float
+  totalCopies     Int     @default(1)
+  availableCopies Int     @default(1)
+  coverImage      String?
+  bookFile        String?
+
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to User (Owner)
+  ownerId Int
+  // ✅ onDelete: Cascade allows you to delete the User in Studio
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  rentals Rental[]
+
+  @@map("books")
+}
+
+model Rental {
+  id         Int       @id @default(autoincrement())
+  price      Float
+  dueDate    DateTime
+  returnDate DateTime?
+  isReturned Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Relation to Book
+  bookId Int
+  // ✅ Cascade here means if a book is deleted, the rental history goes with it
+  book   Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  // Relation to User (Renter)
+  renterId Int
+  renter   User @relation(fields: [renterId], references: [id], onDelete: Cascade)
+
+  @@map("rentals")
+}

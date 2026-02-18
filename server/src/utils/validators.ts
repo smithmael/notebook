@@ -1,7 +1,9 @@
+//server/src/utils/validators.ts
+
 import { z } from 'zod';
 
 // --- User Registration ---
-export const userRegistrationSchema = z.object({
+export const userSignupSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email format'),
     password: z.string().min(8, 'Password must be 8+ characters'),
@@ -14,8 +16,7 @@ export const userRegistrationSchema = z.object({
   }),
 });
 
-// Fixes Error at Line 17: Type alias extracted from Zod
-export type UserRegistrationInput = z.infer<typeof userRegistrationSchema>;
+export type UserSignupInput = z.infer<typeof userSignupSchema>;
 
 // --- User Login ---
 export const userLoginSchema = z.object({
@@ -25,18 +26,32 @@ export const userLoginSchema = z.object({
   }),
 });
 
-// Fixes Error at Line 28
 export type UserLoginInput = z.infer<typeof userLoginSchema>;
 
 // --- Book Creation/Update ---
 export const bookSchema = z.object({
   body: z.object({
-    bookName: z.string().min(1, 'Book name is required'),
-    author: z.string().optional(),
-    category: z.string().optional(),
-    price: z.number().min(0).optional(),
+    title: z.string().min(1, 'Title is required'),
+    author: z.string().min(1, 'Author is required'),
+    category: z.string().min(1, 'Category is required'),
+    // ✅ Coerce converts "10" (string) to 10 (number) automatically
+    rentPrice: z.coerce.number().min(0, 'Price must be positive'),
+    totalCopies: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
   }),
 });
 
-// Fixes Error at Line 41
 export type BookInput = z.infer<typeof bookSchema>;
+
+// --- Rental ---
+export const rentBookSchema = z.object({
+  body: z.object({
+    bookId: z.number().int().positive(),
+    dueDate: z.string().datetime()
+  })
+});
+
+export const returnBookSchema = z.object({
+  body: z.object({
+    rentalId: z.number().int().positive()
+  })
+});

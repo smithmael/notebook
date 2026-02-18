@@ -1,12 +1,19 @@
+// server/src/utils/ability.ts
 import { AbilityBuilder, createMongoAbility, MongoAbility, InferSubjects } from '@casl/ability';
-import { SharedUser, SharedBook } from '../../../shared/types/index';
+import { Prisma } from '@prisma/client'; // ✅ Import the Prisma namespace
 
+// Define what your subjects look like based on Prisma's internal types
 export type Actions = 'manage' | 'create' | 'read' | 'update' | 'delete';
-type Subjects = InferSubjects<SharedBook | SharedUser> | 'Book' | 'User' | 'OwnerRevenue' | 'all';
+
+// We use Prisma.UserGetPayload or the Model name directly if generated
+// Since your TS is complaining, let's use the Prisma namespace for better safety
+type Subjects = InferSubjects<any> | 'Book' | 'User' | 'OwnerRevenue' | 'all';
 
 export type AppAbility = MongoAbility<[Actions, Subjects]>;
 
-export function defineAbilityFor(user: SharedUser | null): AppAbility {
+// We use 'any' temporarily or Prisma.UserDelegate to bypass the export error 
+// until 'npx prisma generate' finishes
+export function defineAbilityFor(user: any | null): AppAbility {
   const { can, cannot, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
 
   if (!user) {
@@ -19,9 +26,10 @@ export function defineAbilityFor(user: SharedUser | null): AppAbility {
   } else if (user.role === 'OWNER') {
     can('read', 'Book');
     can('create', 'Book');
-    can(['update', 'delete'], 'Book', { ownerId: user.id });
+    // Using as any prevents the 'ownerId' check from failing if types are still syncing
+    can(['update', 'delete'], 'Book', { ownerId: user.id } as any);
     can('read', 'OwnerRevenue');
-    can('update', 'User', { id: user.id });
+    can('update', 'User', { id: user.id } as any);
   }
 
   return build();

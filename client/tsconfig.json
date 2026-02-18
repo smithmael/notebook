@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ES2022"], // Keep these for React
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx", // Vital for React
+    
+    "baseUrl": ".",
+    "paths": {
+      "@shared": ["../shared/index.ts"],
+      "@shared/*": ["../shared/*"]
+    },
+    
+    /* Add this line to fix the 'vite/client' error */
+    "types": ["vite/client"]
+  },
+  /* Include 'src' and 'shared', but remove 'server.ts' */
+  "include": ["src", "../shared/index.ts", "../shared/**/*"],
+  "exclude": ["node_modules"]
+}

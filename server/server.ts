@@ -1,6 +1,7 @@
 // server/server.ts
-import { ENV } from './src/config/env';
-import app from './src/config/app';
+import { ENV } from './src/config/env.js'; 
+import app from './src/config/app.js';
+import cloudinary from './src/config/cloudinary.js'; // ✅ Added for health check
 
 const PORT = parseInt(ENV.PORT, 10);
 
@@ -10,6 +11,11 @@ const validateEnvironment = () => {
 
   if (!ENV.DATABASE_URL) {
     errors.push('DATABASE_URL is not set in environment variables');
+  }
+
+  // ✅ Verify Cloudinary variables are loaded from the updated ENV object
+  if (!ENV.CLOUDINARY_NAME || !ENV.CLOUDINARY_API_KEY) {
+    errors.push('Cloudinary configuration is missing in .env');
   }
 
   if (!ENV.JWT_SECRET || ENV.JWT_SECRET === 'your-secret-key') {
@@ -31,16 +37,13 @@ const setupGracefulShutdown = (server: any) => {
     process.on(signal, async () => {
       console.log(`\n${signal} received. Starting graceful shutdown...`);
       
-      // Close server
       server.close(() => {
         console.log('✅ HTTP server closed');
       });
       
-      // Close database connection
       try {
-        // Dynamic import for default export
         const prismaModule = await import('./src/lib/prisma');
-        const prisma = prismaModule.default; // Access default export
+        const prisma = prismaModule.default; 
         await prisma.$disconnect();
         console.log('✅ Database connection closed');
       } catch (error) {
@@ -63,6 +66,11 @@ const startServer = () => {
     console.log(`📍 Port: ${PORT}`);
     console.log(`🌍 Environment: ${ENV.NODE_ENV}`);
     console.log(`🔗 CORS Origin: ${ENV.CORS_ORIGIN}`);
+    
+    // ✅ CLOUDINARY STATUS LOG [cite: 2026-02-17]
+    const cloudName = cloudinary.config().cloud_name;
+    console.log(`☁️  Cloudinary: ${cloudName === 'bookstore' ? '✅ Connected (bookstore)' : `⚠️ Check Name (${cloudName})`}`);
+    
     console.log(`🗄️  Database: ${ENV.DATABASE_URL.includes('localhost') ? 'Local PostgreSQL' : 'Remote Database'}`);
     console.log('==============================');
     console.log(`📡 Local URL: http://localhost:${PORT}`);
@@ -75,7 +83,7 @@ const startServer = () => {
   return server;
 };
 
-// Handle uncaught exceptions
+// Error handling
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
   process.exit(1);
@@ -86,7 +94,5 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Start the application
 const server = startServer();
-
 export default server;

@@ -10,12 +10,14 @@ import { UnauthorizedError } from '../utils/error'
 export const rentBook = async (req: Request, res: Response) => {
   if (!req.user) throw new UnauthorizedError('Not authenticated')
 
+  // payload will look like { body: { bookId: 1, dueDate: "..." } }
   const payload = rentBookSchema.parse(req.body)
 
+  // REACH INTO .body HERE:
   const rental = await rentBookService(
     req.user.id,
-    payload.bookId,
-    new Date(payload.dueDate)
+    payload.body.bookId, // Added .body
+    new Date(payload.body.dueDate) // Added .body
   )
 
   res.status(201).json({
