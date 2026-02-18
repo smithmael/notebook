@@ -1,3 +1,5 @@
+//client/src/features/dashboard/AddBookModal.tsx
+
 import React, { useState } from 'react';
 import { 
   Box, Button, Modal, TextField, Typography, Stack, IconButton 

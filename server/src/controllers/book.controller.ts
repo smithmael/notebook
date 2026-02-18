@@ -3,44 +3,39 @@ import cloudinary from '../config/cloudinary';
 import * as bookService from '../services/book.service';
 import fs from 'fs';
 
-// 1. CREATE (Fixed "undefined reading bookFile" crash)
+// 1. CREATE
 export const uploadBook = async (req: Request, res: Response) => {
   try {
-    // 🛡️ GUARD: If multer fails or no files are sent, req.files is undefined.
-    // We check this first to prevent the crash you're seeing.
     if (!req.files || typeof req.files !== 'object') {
       return res.status(400).json({ 
         status: 'fail', 
-        message: 'No files uploaded. Ensure your form uses multipart/form-data.' 
+        message: 'No files uploaded.' 
       });
     }
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    
-    // Safely access files now that we know 'files' exists
     const pdfFile = files['bookFile']?.[0];
     const coverFile = files['coverImage']?.[0];
 
     if (!pdfFile) {
-      return res.status(400).json({ status: 'fail', message: 'PDF file (bookFile) is required' });
+      return res.status(400).json({ status: 'fail', message: 'PDF file is required' });
     }
 
-    // ✅ CLOUD STORE FIX: 'attachment:false' allows the browser to display the PDF directly
-    const pdfUpload = await cloudinary.uploader.upload(pdfFile.path, {
-      resource_type: 'raw',
-      folder: 'books_storage',
-      flags: "attachment:false", 
+    // ✅ FIX: Set type to 'upload' to prevent 401 Unauthorized errors on 'Read'
+   const pdfUpload = await cloudinary.uploader.upload(pdfFile.path, {
+  resource_type: 'auto', 
+  type: 'upload', 
+  folder: 'books_storage',
     });
-
     let coverUrl = null;
     if (coverFile) {
       const coverUpload = await cloudinary.uploader.upload(coverFile.path, {
+        resource_type: 'image',
         folder: 'book_covers',
       });
       coverUrl = coverUpload.secure_url;
     }
 
-    // 🛡️ PRISMA V7 TYPE SAFETY: Force conversion to numbers
     const bookData = {
       title: req.body.title,
       author: req.body.author,
@@ -54,41 +49,32 @@ export const uploadBook = async (req: Request, res: Response) => {
 
     const book = await bookService.createBook(bookData, Number(req.user!.id));
 
-    // Cleanup local temp files
     if (pdfFile) fs.unlinkSync(pdfFile.path);
     if (coverFile) fs.unlinkSync(coverFile.path);
 
     res.status(201).json({ status: 'success', data: book });
   } catch (e: any) {
-    console.error("Cloudinary Upload Error:", e);
-    res.status(500).json({ status: 'fail', message: e.message || 'Cloud upload failed' });
+    console.error("Upload Error:", e);
+    res.status(500).json({ status: 'fail', message: e.message || 'Upload failed' });
   }
 };
 
-// 2. GET (Fetch for current owner)
+// 2. GET MY BOOKS
 export const getMyBooks = async (req: Request, res: Response) => {
   try {
     const userId = Number(req.user?.id);
-    
-    if (!userId || isNaN(userId)) {
-      return res.status(401).json({ status: 'fail', message: 'Unauthorized: Invalid User ID' });
-    }
-
+    if (!userId) return res.status(401).json({ status: 'fail', message: 'Unauthorized' });
     const result = await bookService.getBooks({ ownerId: userId });
-    
-    res.json({ 
-      status: 'success', 
-      data: result || [] 
-    });
+    res.json({ status: 'success', data: result || [] });
   } catch (e: any) {
-    console.error("PRISMA_FETCH_ERROR:", e); 
     res.status(500).json({ status: 'error', message: 'Database fetch failed' });
   }
 };
 
-// 3. UPDATE (Fixed TS Error 2345)
+// 3. UPDATE (Fixed TS2345)
 export const updateBook = async (req: Request, res: Response) => {
   try {
+    // ✅ FIX: Cast req.params.id to string to satisfy parseInt
     const id = parseInt(req.params.id as string, 10);
     
     if (isNaN(id)) {
@@ -115,9 +101,10 @@ export const updateBook = async (req: Request, res: Response) => {
   }
 };
 
-// 4. DELETE (Fixed TS Error 2345)
+// 4. DELETE (Fixed TS2345)
 export const deleteBook = async (req: Request, res: Response) => {
   try {
+    // ✅ FIX: Cast req.params.id to string to satisfy parseInt
     const id = parseInt(req.params.id as string, 10);
     
     if (isNaN(id)) {
