@@ -65,10 +65,9 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
 
     // 6. Format Earnings for the Chart (e.g., Recharts)
     const earningsSummary = months.map(month => ({
-      name: month, // Frontend charts usually look for 'name' or 'month'
-      amount: earningsMap[month] || 0 
+      month: month, // ✅ Matches frontend EarningData interface
+      amount: Number(earningsMap[month] || 0) 
     }));
-
     // 7. Send the REAL response
     res.json({
       status: 'success',
@@ -83,7 +82,7 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
           id: book.id,
           title: book.title,
           owner: book.owner?.name || 'Unknown',
-          price: book.rentPrice,
+          rentPrice: book.rentPrice,
           availableCopies: book.availableCopies,
           totalCopies: book.totalCopies,
           bookFile: book.bookFile, // This is now the REAL Cloudinary URL

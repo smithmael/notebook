@@ -8,7 +8,6 @@ interface EarningData {
 }
 
 const EarningSummary = ({ data = [] }: { data: EarningData[] }) => {
-  // If no data is passed from the parent, show a placeholder
   if (!data || data.length === 0) {
     return (
       <Paper sx={{ p: 3, borderRadius: 4, height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -40,6 +39,11 @@ const EarningSummary = ({ data = [] }: { data: EarningData[] }) => {
             />
             <Tooltip 
               contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)' }}
+              // ✅ FIXED: Handle potentially undefined values to satisfy TypeScript
+              formatter={(value: number | undefined) => {
+                const numValue = value ?? 0;
+                return [`$${numValue.toFixed(2)}`, 'Earnings'];
+              }}
             />
             <Line 
               type="monotone" 

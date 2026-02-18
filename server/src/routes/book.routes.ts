@@ -33,7 +33,8 @@ router.patch(
   upload.single('coverImage'), 
   bookController.updateBook
 );
-
+// Add this line with your other routes
+router.get('/stats/earnings', bookController.getEarningsStats);
 router.delete('/:id', isAdminOrOwner, bookController.deleteBook);
 
 export default router;

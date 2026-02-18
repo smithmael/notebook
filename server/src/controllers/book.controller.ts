@@ -119,3 +119,15 @@ export const deleteBook = async (req: Request, res: Response) => {
     res.status(404).json({ status: 'fail', message: 'Delete failed' });
   }
 };
+// Add this to your existing book.controller.ts
+export const getEarningsStats = async (req: Request, res: Response) => {
+  try {
+    const ownerId = Number(req.user?.id); // From authenticate middleware
+    if (!ownerId) return res.status(401).json({ status: 'fail', message: 'Unauthorized' });
+
+    const stats = await bookService.getEarningsStats(ownerId);
+    res.json({ status: 'success', data: stats });
+  } catch (e: any) {
+    res.status(500).json({ status: 'error', message: 'Failed to fetch stats' });
+  }
+};
