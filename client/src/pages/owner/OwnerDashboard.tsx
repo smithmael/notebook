@@ -1,17 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Paper, CircularProgress, Alert, Grid, Button } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
+import { Box, Typography, Paper, CircularProgress, Alert, Grid } from '@mui/material';
 import AvailableBooksChart from '../../features/dashboard/AvailableBooksChart';
 import EarningSummary from '../../features/dashboard/EarningSummary';
 import LiveBookStatus from '../../features/dashboard/LiveBookStatus';
-import AddBookModal from '../../features/dashboard/AddBookModal'; // ✅ Component we created
 import { fetchDashboardData } from '../../services/dashboardService';
 
 const OwnerDashboard = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false); // ✅ Modal control
 
   const loadData = () => {
     fetchDashboardData()
@@ -38,18 +35,9 @@ const OwnerDashboard = () => {
 
   return (
     <Box sx={{ p: 1 }}>
-      {/* HEADER WITH ADD BUTTON */}
+      {/* ✅ FIXED: Removed Add Book button to match your specialized Upload Page flow */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Owner / Dashboard</Typography>
-        <Button 
-          variant="contained" 
-          color="primary"
-          startIcon={<AddIcon />} 
-          onClick={() => setIsModalOpen(true)}
-          sx={{ borderRadius: 2, textTransform: 'none', px: 3 }}
-        >
-          Add My Book
-        </Button>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
@@ -72,19 +60,12 @@ const OwnerDashboard = () => {
             <LiveBookStatus 
               books={data?.liveBooks || []} 
               role="OWNER" 
-              onRefresh={loadData} // ✅ Refresh logic for owner
+              onRefresh={loadData} 
             />
             <EarningSummary data={data?.earningsSummary || []} />
           </Box>
         </Grid>
       </Grid>
-
-      {/* ✅ Add Modal - Handles Cloudinary upload & Prisma v7 safety */}
-      <AddBookModal 
-        open={isModalOpen} 
-        handleClose={() => setIsModalOpen(false)} 
-        onRefresh={loadData} 
-      />
     </Box>
   );
 };

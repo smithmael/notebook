@@ -19,12 +19,31 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const getBookUrl = (book: any) => {
-    if (!book?.bookFile) return "#";
-    if (book.bookFile.startsWith('http')) return book.bookFile;
+  if (!book?.bookFile) return "#";
+  
+  const originalUrl = book.bookFile.startsWith('http') 
+    ? book.bookFile 
+    : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${book.bookFile}`;
+
+  // ✅ Route it through your own server
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${apiBase}/books/view?url=${encodeURIComponent(originalUrl)}`;
+};
+  /**
+   * ✅ THE "CLEAN" REDIRECT
+   * This bypasses all your browser's "sticky" 401 memory.
+   */
+  const handleRead = (url: string) => {
+    if (!url || url === "#") return;
     
-    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const cleanPath = book.bookFile.startsWith('/') ? book.bookFile : `/${book.bookFile}`;
-    return `${backendUrl}${cleanPath}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    // 'noreferrer' is the magic word that stops your 401 error
+    link.rel = 'noreferrer noopener'; 
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const displayBooks = (books || []).filter(b => {
@@ -79,25 +98,17 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
                   <TableCell>{i + 1}</TableCell>
                   <TableCell sx={{ fontWeight: 500 }}>{book?.title || "Unknown"}</TableCell>
                   <TableCell>
-                    <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: 0.5, 
-                        color: book?.availableCopies < book?.totalCopies ? '#FF4842' : '#00A3FF' 
-                    }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: (book?.availableCopies || 0) < (book?.totalCopies || 0) ? '#FF4842' : '#00A3FF' }}>
                       <DotIcon sx={{ fontSize: 10 }} /> 
-                      {book?.availableCopies < book?.totalCopies ? 'Rented' : 'Free'}
+                      {(book?.availableCopies || 0) < (book?.totalCopies || 0) ? 'Rented' : 'Free'}
                     </Box>
                   </TableCell>
                   <TableCell>
                     <IconButton 
                       size="small" 
                       color="primary" 
-                      component="a" 
-                      href={getBookUrl(book)} 
-                      target="_blank" 
-                      rel="noopener noreferrer nofollow"
-                      disabled={!book?.bookFile || book.bookFile === "#"}
+                      onClick={() => handleRead(getBookUrl(book))}
+                      disabled={!book?.bookFile}
                     >
                       <ReadIcon fontSize="small" />
                     </IconButton>
@@ -113,7 +124,6 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
       ) : (
         <Grid container spacing={2}>
           {displayBooks?.map((book) => (
-            /* ✅ FIX: MUI v6 Grid syntax (Removed 'item', used 'size' object) */
             <Grid key={book?.id} size={{ xs: 12, sm: 6, md: 4 }}>
               <Card variant="outlined" sx={{ borderRadius: 2 }}>
                 <CardContent>
@@ -122,11 +132,8 @@ const LiveBookStatus = ({ books, role, onRefresh }: { books: any[], role: 'ADMIN
                     <Button 
                       size="small" 
                       startIcon={<ReadIcon />} 
-                      component="a" 
-                      href={getBookUrl(book)} 
-                      target="_blank" 
-                      rel="noopener noreferrer nofollow"
-                      disabled={!book?.bookFile || book.bookFile === "#"}
+                      onClick={() => handleRead(getBookUrl(book))}
+                      disabled={!book?.bookFile}
                     >
                       Read
                     </Button>

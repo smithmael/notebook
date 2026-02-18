@@ -5,11 +5,16 @@ import { authenticate, isAdminOrOwner } from '../middlewares/auth.middleware';
 
 const router = Router();
 
+// ✅ NEW: Proxy route to bypass browser-level 401 errors
+// This must be ABOVE the /:id routes
+router.get('/view', bookController.proxyBookFile);
+
+
 // 🔐 Secure all routes - User must be logged in
 router.use(authenticate);
 
+
 // 1. Create Book
-// Field names 'bookFile' and 'coverImage' must match exactly in your Frontend FormData
 router.post(
   '/',
   isAdminOrOwner, 
@@ -20,11 +25,8 @@ router.post(
   bookController.uploadBook
 );
 
-// 2. Get Owner's Books (Filtered by ownerId in controller)
 router.get('/', bookController.getMyBooks);
 
-// 3. Update Book
-// Handles optional new cover image via upload.single
 router.patch(
   '/:id', 
   isAdminOrOwner, 
@@ -32,7 +34,6 @@ router.patch(
   bookController.updateBook
 );
 
-// 4. Delete Book
 router.delete('/:id', isAdminOrOwner, bookController.deleteBook);
 
 export default router;

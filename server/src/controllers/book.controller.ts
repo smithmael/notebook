@@ -2,15 +2,32 @@ import { Request, Response } from 'express';
 import cloudinary from '../config/cloudinary';
 import * as bookService from '../services/book.service';
 import fs from 'fs';
+import axios from 'axios';
 
-// 1. CREATE
+// ✅ 1. PROXY TO FIX 401 ERROR
+export const proxyBookFile = async (req: Request, res: Response) => {
+  const fileUrl = req.query.url as string;
+  
+  if (!fileUrl) {
+    return res.status(400).json({ status: 'fail', message: 'File URL is required' });
+  }
+
+  try {
+    const response = await axios.get(fileUrl, { responseType: 'stream' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline'); 
+    response.data.pipe(res);
+  } catch (error: any) {
+    console.error("Proxy Error:", error.message);
+    res.status(500).json({ status: 'fail', message: 'Could not fetch file' });
+  }
+};
+
+// ✅ 2. CREATE
 export const uploadBook = async (req: Request, res: Response) => {
   try {
     if (!req.files || typeof req.files !== 'object') {
-      return res.status(400).json({ 
-        status: 'fail', 
-        message: 'No files uploaded.' 
-      });
+      return res.status(400).json({ status: 'fail', message: 'No files uploaded.' });
     }
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -21,12 +38,12 @@ export const uploadBook = async (req: Request, res: Response) => {
       return res.status(400).json({ status: 'fail', message: 'PDF file is required' });
     }
 
-    // ✅ FIX: Set type to 'upload' to prevent 401 Unauthorized errors on 'Read'
-   const pdfUpload = await cloudinary.uploader.upload(pdfFile.path, {
-  resource_type: 'auto', 
-  type: 'upload', 
-  folder: 'books_storage',
+    const pdfUpload = await cloudinary.uploader.upload(pdfFile.path, {
+      resource_type: 'auto', 
+      type: 'upload', 
+      folder: 'books_storage',
     });
+
     let coverUrl = null;
     if (coverFile) {
       const coverUpload = await cloudinary.uploader.upload(coverFile.path, {
@@ -54,12 +71,11 @@ export const uploadBook = async (req: Request, res: Response) => {
 
     res.status(201).json({ status: 'success', data: book });
   } catch (e: any) {
-    console.error("Upload Error:", e);
     res.status(500).json({ status: 'fail', message: e.message || 'Upload failed' });
   }
 };
 
-// 2. GET MY BOOKS
+// ✅ 3. GET MY BOOKS
 export const getMyBooks = async (req: Request, res: Response) => {
   try {
     const userId = Number(req.user?.id);
@@ -71,28 +87,18 @@ export const getMyBooks = async (req: Request, res: Response) => {
   }
 };
 
-// 3. UPDATE (Fixed TS2345)
+// ✅ 4. UPDATE
 export const updateBook = async (req: Request, res: Response) => {
   try {
-    // ✅ FIX: Cast req.params.id to string to satisfy parseInt
     const id = parseInt(req.params.id as string, 10);
-    
-    if (isNaN(id)) {
-      return res.status(400).json({ status: 'fail', message: 'Invalid Book ID' });
-    }
+    if (isNaN(id)) return res.status(400).json({ status: 'fail', message: 'Invalid ID' });
 
     const updateData = { ...req.body };
-
     if (req.file) {
-      const coverUpload = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'book_covers',
-      });
+      const coverUpload = await cloudinary.uploader.upload(req.file.path, { folder: 'book_covers' });
       updateData.coverImage = coverUpload.secure_url;
       fs.unlinkSync(req.file.path);
     }
-
-    if (updateData.rentPrice) updateData.rentPrice = Number(updateData.rentPrice);
-    if (updateData.totalCopies) updateData.totalCopies = Number(updateData.totalCopies);
 
     const book = await bookService.updateBook(id, updateData);
     res.json({ status: 'success', data: book });
@@ -101,15 +107,11 @@ export const updateBook = async (req: Request, res: Response) => {
   }
 };
 
-// 4. DELETE (Fixed TS2345)
+// ✅ 5. DELETE
 export const deleteBook = async (req: Request, res: Response) => {
   try {
-    // ✅ FIX: Cast req.params.id to string to satisfy parseInt
     const id = parseInt(req.params.id as string, 10);
-    
-    if (isNaN(id)) {
-      return res.status(400).json({ status: 'fail', message: 'Invalid Book ID' });
-    }
+    if (isNaN(id)) return res.status(400).json({ status: 'fail', message: 'Invalid ID' });
 
     await bookService.deleteBook(id);
     res.status(204).send();
