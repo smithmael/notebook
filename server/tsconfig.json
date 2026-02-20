@@ -5,19 +5,21 @@
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "allowJs": false,
     "skipLibCheck": true,
-    "types": ["node"],
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "node",
-    "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
+    // 👇 ADD THIS TO FIND YOUR CUSTOM TYPES
+    "typeRoots": ["./node_modules/@types", "./src/types"], 
+    // 👇 ADD "express" HERE SO IT DOESN'T IGNORE IT
+    "types": ["node", "express"], 
     "paths": {
       "@shared": ["../shared/index.ts"],
       "@shared/*": ["../shared/*"],

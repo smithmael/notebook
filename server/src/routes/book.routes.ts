@@ -5,16 +5,18 @@ import { authenticate, isAdminOrOwner } from '../middlewares/auth.middleware';
 
 const router = Router();
 
-// ✅ NEW: Proxy route to bypass browser-level 401 errors
-// This must be ABOVE the /:id routes
+// 🟢 1. PUBLIC ROUTES (Anyone can see the library)
 router.get('/view', bookController.proxyBookFile);
+router.get('/', bookController.getAllBooks); // Fixed: Points to ALL books
 
-
-// 🔐 Secure all routes - User must be logged in
+// 🔐 2. SECURE ROUTES (Must be logged in)
 router.use(authenticate);
 
+// Owner-specific list
+router.get('/owned', bookController.getMyBooks);
+router.get('/stats/earnings', bookController.getEarningsStats);
 
-// 1. Create Book
+// Management (Create/Update/Delete)
 router.post(
   '/',
   isAdminOrOwner, 
@@ -25,16 +27,7 @@ router.post(
   bookController.uploadBook
 );
 
-router.get('/', bookController.getMyBooks);
-
-router.patch(
-  '/:id', 
-  isAdminOrOwner, 
-  upload.single('coverImage'), 
-  bookController.updateBook
-);
-// Add this line with your other routes
-router.get('/stats/earnings', bookController.getEarningsStats);
+router.patch('/:id', isAdminOrOwner, upload.single('coverImage'), bookController.updateBook);
 router.delete('/:id', isAdminOrOwner, bookController.deleteBook);
 
 export default router;

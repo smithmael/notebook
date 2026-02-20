@@ -1,65 +1,66 @@
-import { Request, Response } from 'express'
-import { rentBookSchema } from '../utils/validators'
-import {
-  rentBookService,
-  returnBookService
-} from '../services/rental.service'
-import prisma from '../config/database'
-import { UnauthorizedError } from '../utils/error'
+// server/src/controllers/rental.controller.ts
+import { Request, Response } from 'express';
+import axios from 'axios';
+import { rentBookSchema } from '../utils/validators';
+import prisma from '../config/database'; 
+import { UnauthorizedError } from '../utils/error';
+import { Role } from '../generated/client';
+
+interface AuthUser {
+  id: number;
+  role: Role;
+  email: string;
+  name: string;
+}
 
 export const rentBook = async (req: Request, res: Response) => {
-  if (!req.user) throw new UnauthorizedError('Not authenticated')
+  const user = req.user as AuthUser;
+  if (!user) throw new UnauthorizedError('Not authenticated');
 
-  // payload will look like { body: { bookId: 1, dueDate: "..." } }
-  const payload = rentBookSchema.parse(req.body)
+  try {
+    // 🛡️ Validate the incoming body
+    const payload = rentBookSchema.parse(req); 
+    const { bookId } = payload.body;
 
-  // REACH INTO .body HERE:
-  const rental = await rentBookService(
-    req.user.id,
-    payload.body.bookId, // Added .body
-    new Date(payload.body.dueDate) // Added .body
-  )
+    const book = await prisma.book.findUnique({ 
+      where: { id: Number(bookId) } 
+    });
 
-  res.status(201).json({
-    message: 'Book rented successfully',
-    rental
-  })
-}
+    if (!book) return res.status(404).json({ message: "Book not found" });
 
-export const getMyRentals = async (req: Request, res: Response) => {
-  if (!req.user) throw new UnauthorizedError('Not authenticated')
+    const tx_ref = `tx-${user.id}-${bookId}-${Date.now()}`;
 
-  const rentals = await prisma.rental.findMany({
-    where: { renterId: req.user.id },
-    include: { book: true },
-    orderBy: { createdAt: 'desc' }
-  })
+    const chapaResponse = await axios.post(
+      'https://api.chapa.co/v1/transaction/initialize',
+      {
+        amount: book.rentPrice,
+        currency: 'ETB',
+        email: user.email,         
+        first_name: user.name.split(' ')[0] || 'Customer', 
+        tx_ref: tx_ref,
+        callback_url: `${process.env.BACKEND_URL}/api/rentals/webhook`,
+        return_url: `${process.env.FRONTEND_URL}/bookshelf`, // Redirect back to bookshelf
+        "customization[title]": `Renting ${book.title}`,
+      },
+      {
+        headers: { 
+          Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-  res.json(rentals)
-}
+    res.status(200).json({
+      success: true,
+      message: 'Payment initialized',
+      checkoutUrl: chapaResponse.data.data.checkout_url
+    });
 
-export const getAllRentals = async (_req: Request, res: Response) => {
-  const rentals = await prisma.rental.findMany({
-    include: {
-      book: { include: { owner: true } },
-      renter: true
-    },
-    orderBy: { createdAt: 'desc' }
-  })
-
-  res.json(rentals)
-}
-
-export const returnBook = async (req: Request, res: Response) => {
-  if (!req.user) throw new UnauthorizedError('Not authenticated')
-
-  const result = await returnBookService(
-    req.user.id,
-    Number(req.params.id)
-  )
-
-  res.json({
-    message: 'Book returned successfully',
-    lateFee: result.lateFee
-  })
-}
+  } catch (error: any) {
+    // Log the actual error from Chapa for debugging
+    console.error("Chapa Initialization Failed:", error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({ 
+      message: error.response?.data?.message || "Payment service unavailable" 
+    });
+  }
+};

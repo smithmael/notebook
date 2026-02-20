@@ -33,18 +33,22 @@ export const createBook = async (bookData: any, ownerId: number) => {
   });
 };
 
+// server/src/services/book.service.ts
+
 /**
- * ✅ Fetches books with pagination
+ * ✅ Fetches books with pagination (Standardized for User Library)
  */
-export const getBooks = async (where: any = {}, page: number = 1, pageSize: number = 10) => {
+export const getBooks = async (where: any = {}, page: number = 1, pageSize: number = 12) => {
   const skip = (page - 1) * pageSize;
   const filter = { ...where };
+  
+  // Ensure ownerId is a number if it exists
   if (filter.ownerId) filter.ownerId = Number(filter.ownerId);
 
   const [books, total] = await Promise.all([
     prisma.book.findMany({
       where: filter,
-      skip,
+      skip: Number(skip),
       take: Number(pageSize),
       orderBy: { createdAt: 'desc' },
       include: { owner: { select: { name: true } } }
@@ -52,6 +56,8 @@ export const getBooks = async (where: any = {}, page: number = 1, pageSize: numb
     prisma.book.count({ where: filter })
   ]);
 
+  // ✅ This returns an OBJECT, not an ARRAY. 
+  // The Frontend must map over result.data
   return {
     data: books,
     meta: { 

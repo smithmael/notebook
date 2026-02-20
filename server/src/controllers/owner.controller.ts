@@ -128,26 +128,44 @@ export const ownerController = {
       res.status(500).json({ success: false, message: "Failed to delete book" });
     }
   },
-
-  async getDashboardStats(req: Request, res: Response) {
+async getDashboardStats(req: Request, res: Response) {
     try {
       const ownerId = req.user!.id;
 
-      const [totalBooks, activeBooks, totalRentals, activeRentals] =
-        await Promise.all([
-          prisma.book.count({ where: { ownerId } }),
-          prisma.book.count({ where: { ownerId, status: "active" } }),
-          prisma.rental.count({ where: { book: { ownerId } } }),
-          prisma.rental.count({
-            where: { book: { ownerId }, isReturned: false },
-          }),
-        ]);
+      // 1. Get counts and aggregate income
+      const [totalBooks, activeRentals, incomeResult, liveBooks] = await Promise.all([
+        prisma.book.count({ where: { ownerId } }),
+        prisma.rental.count({ where: { book: { ownerId }, isReturned: false } }),
+        prisma.rental.aggregate({
+          where: { book: { ownerId } },
+          _sum: { price: true }
+        }),
+        prisma.book.findMany({
+          where: { ownerId },
+          take: 5,
+          orderBy: { createdAt: 'desc' }
+        })
+      ]);
 
+      const income = incomeResult._sum.price || 0;
+
+      // 2. Return the EXACT structure expected by the frontend
       res.json({
         success: true,
-        data: { totalBooks, activeBooks, totalRentals, activeRentals },
+        data: {
+          income: income,
+          liveBooks: liveBooks, // Array for the table
+          pieChart: [
+            { name: 'Available', value: totalBooks - activeRentals },
+            { name: 'Rented', value: activeRentals }
+          ],
+          earningsSummary: [
+            { name: 'Earnings', income: income }
+          ]
+        }
       });
     } catch (error) {
+      console.error("Owner Stats Error:", error);
       res.status(500).json({ success: false, message: "Failed to fetch stats" });
     }
   },

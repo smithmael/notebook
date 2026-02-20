@@ -3,17 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { 
   Box, Typography, TextField, Button, Divider, 
- Grid, // ✅ Use Grid2 to match modern MUI v6 standards
-  LinearProgress, Alert, Fade 
+  Grid, Alert, Fade, Backdrop 
 } from '@mui/material';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import api from '../../api/axios';
 import { useAuthStore } from '../../store/authStore';
 
+// ✅ Import your thematic hollow book loader
+import { BookLoader } from '../../components/loaders/BookLoader';
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [error, setError] = useState('');
+  const [loginSuccess, setLoginSuccess] = useState(false);
 
   const { register, handleSubmit, formState: { isSubmitting } } = useForm({
     defaultValues: { email: '', password: '' }
@@ -23,7 +26,6 @@ const LoginPage = () => {
     try {
       setError('');
       const response = await api.post('/auth/login', formData);
-      
       const { user, token } = response.data.data;
 
       if (user.role === 'OWNER' && user.status === 'pending') {
@@ -31,13 +33,15 @@ const LoginPage = () => {
         return; 
       }
 
+      setLoginSuccess(true);
       setAuth(token, user.role);
 
+      // Transition time for the "Success" feeling
       setTimeout(() => {
         if (user.role === 'ADMIN') navigate('/admin/dashboard');
         else if (user.role === 'OWNER') navigate('/owner/dashboard');
         else navigate('/bookshelf');
-      }, 100);
+      }, 1000);
 
     } catch (err: any) {
       setError(err.response?.data?.message || "Invalid email or password");
@@ -46,7 +50,37 @@ const LoginPage = () => {
 
   return (
     <Grid container sx={{ height: '100vh', bgcolor: '#F5F7FA' }}>
-      {/* ✅ FIX: Removed 'item' and used 'size' object for MUI v6 */}
+      
+      {/* 🚀 Thematic Loader Overlay */}
+      <Backdrop
+        sx={{ 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          flexDirection: 'column',
+          bgcolor: loginSuccess ? 'rgba(0, 163, 255, 0.05)' : 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(4px)', // Figma-style blur
+          transition: 'all 0.5s ease'
+        }}
+        open={isSubmitting || loginSuccess}
+      >
+        <Box sx={{ transform: 'scale(1.5)' }}>
+           <BookLoader />
+        </Box>
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            fontWeight: 800, 
+            letterSpacing: 4, 
+            color: '#171B36', 
+            mt: -10, // Adjust based on loader height
+            opacity: 0.8,
+            textTransform: 'uppercase'
+          }}
+        >
+          {loginSuccess ? 'Welcome Back' : 'Opening your library...'}
+        </Typography>
+      </Backdrop>
+
+      {/* Brand Side */}
       <Grid 
         size={{ xs: 0, sm: 4, md: 6 }} 
         sx={{ 
@@ -64,16 +98,22 @@ const LoginPage = () => {
         </Fade>
       </Grid>
 
-      {/* ✅ FIX: Removed 'item' and used 'size' object */}
-      <Grid size={{ xs: 12, sm: 8, md: 6 }} sx={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        {isSubmitting && <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4 }} />}
-        
+      {/* Form Side */}
+      <Grid size={{ xs: 12, sm: 8, md: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
         <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
           <Box sx={{ maxWidth: 400, width: '100%' }}>
-            <Typography variant="h4" fontWeight="800" gutterBottom>Login</Typography>
+            <Typography variant="h4" fontWeight="900" gutterBottom sx={{ color: '#171B36' }}>
+              Login
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+              Enter your credentials to access your dashboard
+            </Typography>
             
             {error && (
-              <Alert severity={error.includes("pending") ? "info" : "error"} sx={{ mb: 3, borderRadius: 2 }}>
+              <Alert 
+                severity={error.includes("pending") ? "info" : "error"} 
+                sx={{ mb: 3, borderRadius: 3, fontWeight: 600, border: '1px solid' }}
+              >
                 {error}
               </Alert>
             )}
@@ -82,30 +122,38 @@ const LoginPage = () => {
               <TextField 
                 fullWidth label="Email address" margin="normal" 
                 {...register('email', { required: true })} 
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: 'white' } }}
               />
               <TextField 
                 fullWidth label="Password" type="password" margin="normal" 
                 {...register('password', { required: true })} 
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: 'white' } }}
               />
 
               <Button 
-                type="submit" fullWidth variant="contained" disabled={isSubmitting}
+                type="submit" fullWidth variant="contained" 
+                disabled={isSubmitting || loginSuccess}
                 sx={{ 
-                  mt: 4, mb: 2, bgcolor: '#171B36', height: 56, borderRadius: 3, fontWeight: '800',
-                  '&:hover': { bgcolor: '#00A3FF' } 
+                  mt: 4, mb: 2, bgcolor: '#171B36', height: 56, borderRadius: 3, fontWeight: '900',
+                  letterSpacing: 1,
+                  boxShadow: '0 8px 16px rgba(23, 27, 54, 0.2)',
+                  '&:hover': { bgcolor: '#00A3FF', boxShadow: '0 8px 24px rgba(0, 163, 255, 0.3)' } 
                 }}
               >
                 {isSubmitting ? 'VERIFYING...' : 'LOGIN'}
               </Button>
 
-              <Divider sx={{ my: 3 }}>OR</Divider>
+              <Divider sx={{ my: 3 }}>
+                 <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>OR</Typography>
+              </Divider>
 
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Don't have an account? 
-                  <Button onClick={() => navigate('/signup')} sx={{ fontWeight: '800', color: '#00A3FF', ml: 1 }}>
+                  <Button 
+                    onClick={() => navigate('/signup')} 
+                    sx={{ fontWeight: '900', color: '#00A3FF', ml: 1, textTransform: 'none' }}
+                  >
                     Sign Up
                   </Button>
                 </Typography>

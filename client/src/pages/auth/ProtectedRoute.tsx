@@ -6,17 +6,16 @@ const ProtectedRoute = ({ allowedRoles }: { allowedRoles: string[] }) => {
   const userRole = useAuthStore((state) => state.userRole);
   const _hasHydrated = useAuthStore((state) => state._hasHydrated);
 
-  // 🛑 STOP the "dive" here. If we haven't hydrated, show a blank or loader
-  if (!_hasHydrated) {
-    return null; // or <LoadingSpinner />
-  }
+  if (!_hasHydrated) return null;
 
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
+  // ✅ Always redirect to "/" if unauthorized. 
+  // App.tsx handles the logic of where to send specific roles from there.
   if (allowedRoles && !allowedRoles.includes(userRole || '')) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;

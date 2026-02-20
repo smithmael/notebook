@@ -1,0 +1,54 @@
+/* Professional Page Entrance Animation (You already have this) */
+@keyframes pageEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Pulse Animation for the Global Loader Icon */
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(0, 163, 255, 0.7); }
+  50% { transform: scale(1.05); opacity: 0.8; box-shadow: 0 0 20px 10px rgba(0, 163, 255, 0); }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(0, 163, 255, 0); }
+}
+
+.page-transition {
+  animation: pageEntrance 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Apply to the icon in App.tsx */
+.pulse-loader {
+  animation: pulse 2s infinite ease-in-out;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #F8FAFC;
+  overflow-x: hidden;
+}
+
+/* Smooth transition for Sidebar items */
+.MuiListItemButton-root {
+  transition: all 0.2s ease-in-out !important;
+}
+
+/* Custom Scrollbar for a "Pro" Look */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00A3FF;
+}

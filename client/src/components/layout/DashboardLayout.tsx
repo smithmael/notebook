@@ -1,16 +1,15 @@
-// components/layout/DashboardLayout.tsx
 import React from 'react';
 import { Box, CssBaseline } from '@mui/material';
-import { Outlet } from 'react-router-dom'; // ✅ Import Outlet
+import { Outlet, useLocation } from 'react-router-dom'; // ✅ Added useLocation
 import Sidebar from './Sidebar';
 
-// ✅ Added interface to make children optional (?) 
-// This fixes the "Property children is missing" error in App.tsx
 interface DashboardLayoutProps {
   children?: React.ReactNode;
 }
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
+  const location = useLocation(); // ✅ Track current URL path
+
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#F5F7FA' }}>
       <CssBaseline />
@@ -22,15 +21,25 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
           ml: '240px', 
           width: `calc(100% - 240px)`,
-          overflowY: 'auto'
+          overflowY: 'auto',
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
-        {/* ✅ FIX: If children are passed (standard way), show them.
-            Otherwise, show the Outlet (React Router way). */}
-        {children || <Outlet />}
+        {/* 🚀 WRAPPER FOR ANIMATION 
+          The 'key' prop is vital. When the path changes, 
+          React treats this as a new element and re-runs the 'page-transition' 
+        */}
+        <Box 
+          key={location.pathname} 
+          className="page-transition" 
+          sx={{ p: 3, flexGrow: 1 }}
+        >
+          {children || <Outlet />}
+        </Box>
       </Box>
     </Box>
   );

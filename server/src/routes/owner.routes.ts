@@ -18,6 +18,5 @@ router.get('/books', authenticate, ownerController.getMyBooks);
 router.get('/books/:id', authenticate, ownerController.getBookById);
 router.patch('/books/:id', authenticate, ownerController.updateBook);
 router.delete('/books/:id', authenticate, ownerController.deleteBook);
-router.get('/revenue-chart', authenticate, ownerController.getDashboardStats);
-
+router.get('/stats', authenticate, ownerController.getDashboardStats);
 export default router;

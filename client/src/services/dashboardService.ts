@@ -1,22 +1,53 @@
-import api from '../api/axios'; 
+import api from '../api/axios';
 
-export const fetchDashboardData = async () => {
+// interface for dashboard structure
+export interface DashboardData {
+  income: number;
+  liveBooks: any[];
+  pieChart: any[];
+  earningsSummary: any[];
+}
+
+// 👤 For the Book Owner
+export const fetchDashboardData = async (): Promise<DashboardData> => {
   try {
-    const response = await api.get('/dashboard');
-    
-    // ✅ Always default to an empty object to prevent frontend crashes
-    const dashboardStats = response.data?.data || {}; 
-    
-    // Ensure nested arrays also have defaults for the charts/tables
+    const response = await api.get('/owner/stats'); 
+    const stats = response.data?.data || {};
     return {
-      income: dashboardStats.income || 0,
-      liveBooks: dashboardStats.liveBooks || [],
-      pieChart: dashboardStats.pieChart || [],
-      earningsSummary: dashboardStats.earningsSummary || []
+      income: stats.income || 0,
+      liveBooks: stats.liveBooks || [],
+      pieChart: stats.pieChart || [],
+      earningsSummary: stats.earningsSummary || []
     };
   } catch (error: any) {
-    // 🛡️ Real error logging for debugging Prisma v7 issues [cite: 2026-02-08, 2026-02-13]
-    console.error("Dashboard Service Error:", error?.response?.data || error.message);
+    console.error("Owner Dashboard Error:", error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const fetchOwnerDashboardData = async () => {
+  try {
+    const response = await api.get('/owner/stats'); 
+    return response.data?.data || {}; 
+  } catch (error: any) {
+    console.error("Owner Dashboard Service Error:", error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 🔑 For the Admin [cite: 2026-02-08]
+export const fetchAdminDashboardData = async (): Promise<DashboardData> => {
+  try {
+    const response = await api.get('/admin/stats');
+    const stats = response.data?.data || response.data || {};
+    return {
+      income: stats.income || 0,
+      liveBooks: stats.liveBooks || [],
+      pieChart: stats.pieChart || [],
+      earningsSummary: stats.earningsSummary || []
+    };
+  } catch (error: any) {
+    console.error("Admin Dashboard Error:", error?.response?.data || error.message);
     throw error;
   }
 };
